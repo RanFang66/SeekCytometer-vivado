@@ -1,0 +1,67 @@
+# Vivado 生成目录
+*.cache/
+*.gen/
+*.hw/
+*.runs/
+*.sim/
+*.tmp/
+*.ip_user_files/
+.Xil/
+
+# 二进制产物
+*.dcp
+*.bit
+*.bin
+*.ltx
+*.xsa
+*.hwh
+*.mmi
+*.elf
+
+# 日志与报告
+*.log
+*.jou
+*.str
+*.rpt
+*.rpx
+*.pb
+*.wdb
+*.wcfg
+ip_upgrade.log
+htr.txt
+
+# 仿真文件
+*.vcd
+*.fsdb
+*.saif
+xsim.dir/
+
+# IP网表（可重新生成）
+*_sim_netlist.v
+*_sim_netlist.vhdl
+*_stub.v
+*_stub.vhdl
+
+# 自动生成脚本
+runme.bat
+runme.sh
+ISEWrap.js
+ISEWrap.sh
+rundef.js
+
+# 运行状态
+.vivado.begin.rst
+.vivado.end.rst
+*_propImpl.xdc
+__synthesis_is_complete__
+gen_run.xml
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 编辑器
+*~
+*.swp
+*.bak
+*.backup.*

@@ -1,0 +1,54 @@
+{
+   "ActiveEmotionalView":"Default View",
+   "Default View_ScaleFactor":"0.588016",
+   "Default View_TopLeft":"-54,-146",
+   "ExpandedHierarchyInLayout":"",
+   "guistr":"# # String gsaved with Nlview 7.5.8 2022-09-21 7111 VDI=41 GEI=38 GUI=JA:10.0
+#  -string -flagsOSRD
+preplace port ad7606c_port -pg 1 -lvl 0 -x 0 -y 430 -defaultsOSRD
+preplace port port-id_drive_level_out -pg 1 -lvl 10 -x 3380 -y 530 -defaultsOSRD
+preplace inst zynq_ultra_ps_e_0 -pg 1 -lvl 6 -x 2010 -y 290 -defaultsOSRD
+preplace inst ps8_0_axi_periph -pg 1 -lvl 7 -x 2530 -y 180 -defaultsOSRD
+preplace inst rst_ps8_0_199M -pg 1 -lvl 1 -x 200 -y 720 -defaultsOSRD
+preplace inst axi_dma_0 -pg 1 -lvl 4 -x 1210 -y 280 -defaultsOSRD
+preplace inst axi_smc -pg 1 -lvl 5 -x 1550 -y 260 -defaultsOSRD
+preplace inst axis_register_slice_0 -pg 1 -lvl 3 -x 910 -y 250 -defaultsOSRD
+preplace inst blk_mem_gen_0 -pg 1 -lvl 9 -x 3260 -y 300 -defaultsOSRD
+preplace inst axi_bram_ctrl_0 -pg 1 -lvl 8 -x 2950 -y 240 -defaultsOSRD -resize 354 138
+preplace inst signal_analyzer_0 -pg 1 -lvl 8 -x 2950 -y 480 -defaultsOSRD
+preplace inst ad_sample_0 -pg 1 -lvl 2 -x 560 -y 460 -defaultsOSRD
+preplace netloc ad_sample_0_ad_ch1_val 1 2 6 NJ 410 NJ 410 NJ 410 NJ 410 NJ 410 N
+preplace netloc ad_sample_0_ad_ch2_val 1 2 6 NJ 430 NJ 430 NJ 430 NJ 430 NJ 430 N
+preplace netloc ad_sample_0_ad_ch3_val 1 2 6 NJ 450 NJ 450 NJ 450 NJ 450 NJ 450 N
+preplace netloc ad_sample_0_ad_ch4_val 1 2 6 NJ 470 NJ 470 NJ 470 NJ 470 NJ 470 N
+preplace netloc ad_sample_0_ad_ch5_val 1 2 6 N 490 NJ 490 NJ 490 NJ 490 NJ 490 NJ
+preplace netloc ad_sample_0_ad_ch6_val 1 2 6 N 510 NJ 510 NJ 510 NJ 510 NJ 510 NJ
+preplace netloc ad_sample_0_ad_ch7_val 1 2 6 N 530 NJ 530 NJ 530 NJ 530 NJ 530 NJ
+preplace netloc ad_sample_0_ad_ch8_val 1 2 6 N 550 NJ 550 NJ 550 NJ 550 NJ 550 NJ
+preplace netloc ad_sample_0_ad_data_valid 1 2 6 710J 160 NJ 160 NJ 160 NJ 160 2320J 390 N
+preplace netloc axi_dma_0_s2mm_introut 1 4 2 1380 350 1710J
+preplace netloc rst_ps8_0_199M_peripheral_aresetn 1 1 7 400 310 800 340 1040 390 1410 380 NJ 380 2370 370 2730
+preplace netloc signal_analyzer_0_drive_level_out 1 8 2 NJ 530 NJ
+preplace netloc zynq_ultra_ps_e_0_pl_clk0 1 0 8 20 490 390 300 790 330 1030 170 1400 360 1700 200 2380 360 2750
+preplace netloc zynq_ultra_ps_e_0_pl_resetn0 1 0 7 30 610 NJ 610 NJ 610 NJ 610 NJ 610 NJ 610 2310
+preplace netloc ad7606c_port_0_1 1 0 2 NJ 430 NJ
+preplace netloc ad_sample_0_M00_AXIS 1 2 1 720 230n
+preplace netloc axi_bram_ctrl_0_BRAM_PORTA 1 8 1 3150 240n
+preplace netloc axi_dma_0_M_AXI_S2MM 1 4 1 1380 230n
+preplace netloc axi_dma_0_M_AXI_SG 1 4 1 N 250
+preplace netloc axi_smc_M00_AXI 1 5 1 N 260
+preplace netloc axis_register_slice_0_M_AXIS 1 3 1 N 250
+preplace netloc ps8_0_axi_periph_M00_AXI 1 1 7 410 -10 NJ -10 NJ -10 NJ -10 NJ -10 NJ -10 2680
+preplace netloc ps8_0_axi_periph_M01_AXI 1 3 5 1040 0 NJ 0 NJ 0 NJ 0 2700
+preplace netloc ps8_0_axi_periph_M02_AXI 1 7 1 2740 190n
+preplace netloc ps8_0_axi_periph_M03_AXI 1 7 1 N 210
+preplace netloc signal_analyzer_0_BRAM_PORT 1 8 1 3160 290n
+preplace netloc zynq_ultra_ps_e_0_M_AXI_HPM0_LPD 1 6 1 2310 60n
+levelinfo -pg 1 0 200 560 910 1210 1550 2010 2530 2950 3260 3380
+pagesize -pg 1 -db -bbox -sgen -160 -20 3540 820
+"
+}
+{
+   "da_axi4_cnt":"10",
+   "da_clkrst_cnt":"5"
+}
