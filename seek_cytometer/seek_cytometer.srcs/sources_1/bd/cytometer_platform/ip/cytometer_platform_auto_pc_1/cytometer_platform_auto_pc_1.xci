@@ -59,7 +59,7 @@
         "MANAGED": [ { "value": "TRUE" } ],
         "OUTPUTDIR": [ { "value": "../../../../../../seek_cytometer.gen/sources_1/bd/cytometer_platform/ip/cytometer_platform_auto_pc_1" } ],
         "SELECTEDSIMMODEL": [ { "value": "rtl" } ],
-        "SHAREDDIR": [ { "value": "../../ipshared" } ],
+        "SHAREDDIR": [ { "value": "../../../../../../seek_cytometer.srcs/sources_1/bd/cytometer_platform/ipshared" } ],
         "SWVERSION": [ { "value": "2023.1" } ],
         "SYNTHESISFLOW": [ { "value": "OUT_OF_CONTEXT" } ]
       }
@@ -283,7 +283,7 @@
           "parameters": {
             "POLARITY": [ { "value": "ACTIVE_LOW", "value_src": "constant", "value_permission": "bd", "resolve_type": "generated", "is_ips_inferred": true, "is_static_object": false } ],
             "INSERT_VIP": [ { "value": "0", "resolve_type": "user", "format": "long", "usage": "simulation.rtl", "is_ips_inferred": true, "is_static_object": false } ],
-            "TYPE": [ { "value": "INTERCONNECT", "resolve_type": "generated", "is_ips_inferred": true, "is_static_object": false } ]
+            "TYPE": [ { "value": "INTERCONNECT", "value_permission": "bd", "resolve_type": "generated", "is_ips_inferred": true, "is_static_object": false } ]
           },
           "port_maps": {
             "RST": [ { "physical_name": "aresetn" } ]
