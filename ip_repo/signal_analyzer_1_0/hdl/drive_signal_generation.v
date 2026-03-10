@@ -11,6 +11,8 @@
     input wire [31:0] drive_delay,
     input wire [31:0] drive_width,
     input wire [31:0] cooling_time,
+    input wire [15:0] measured_time_diff,
+    input wire [31:0] measured_coe,
     output reg [2:0]  drive_state,
     output wire        drive_level
 );
@@ -24,12 +26,28 @@
     reg [31:0]          time_drive_end;
     reg [31:0]          time_drive_cooling_end;
     reg                 drive_level_edge;
-    
+    reg [47:0]          delay_calculated;           // 32 + 16
+    reg [47:0]          delay_total;
+
+
     assign drive_level = (drive_type) ? drive_level_edge : (drive_state == S_DRIVE_HIGH);
     
     reg sort_trig_d0;
     reg sort_trig_d1;
     wire sort_start;
+
+
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n) begin
+            delay_calculated <= 48'b0;
+            delay_total <= 48'b0;
+        end else begin
+            delay_calculated <= measured_time_diff * measured_coe;    
+            delay_total <= (delay_calculated >> 14) + drive_delay;
+        end
+    end 
+
+
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
             sort_trig_d0 <= 1'b0;
@@ -57,7 +75,7 @@
                     if (sort_start)
                     begin
                         drive_state <= S_DRIVE_WAIT;
-                        time_drive_start <= (time_us + drive_delay);
+                        time_drive_start <= (time_us + delay_total[31:0]);
                     end	
                 end
                 S_DRIVE_WAIT:

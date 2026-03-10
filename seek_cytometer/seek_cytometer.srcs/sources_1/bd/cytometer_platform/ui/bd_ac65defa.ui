@@ -1,7 +1,7 @@
 {
    "ActiveEmotionalView":"Default View",
    "Default View_ScaleFactor":"0.588016",
-   "Default View_TopLeft":"-138,-418",
+   "Default View_TopLeft":"784,-417",
    "ExpandedHierarchyInLayout":"",
    "guistr":"# # String gsaved with Nlview 7.5.8 2022-09-21 7111 VDI=41 GEI=38 GUI=JA:10.0
 #  -string -flagsOSRD
@@ -15,8 +15,8 @@ preplace inst axi_smc -pg 1 -lvl 5 -x 1550 -y 260 -defaultsOSRD
 preplace inst axis_register_slice_0 -pg 1 -lvl 3 -x 910 -y 250 -defaultsOSRD
 preplace inst blk_mem_gen_0 -pg 1 -lvl 9 -x 3260 -y 300 -defaultsOSRD
 preplace inst axi_bram_ctrl_0 -pg 1 -lvl 8 -x 2950 -y 240 -defaultsOSRD -resize 354 138
-preplace inst signal_analyzer_0 -pg 1 -lvl 8 -x 2950 -y 480 -defaultsOSRD
 preplace inst ad_sample_0 -pg 1 -lvl 2 -x 560 -y 460 -defaultsOSRD
+preplace inst signal_analyzer_0 -pg 1 -lvl 8 -x 2950 -y 480 -defaultsOSRD
 preplace netloc ad_sample_0_ad_ch1_val 1 2 6 NJ 410 NJ 410 NJ 410 NJ 410 NJ 410 N
 preplace netloc ad_sample_0_ad_ch2_val 1 2 6 NJ 430 NJ 430 NJ 430 NJ 430 NJ 430 N
 preplace netloc ad_sample_0_ad_ch3_val 1 2 6 NJ 450 NJ 450 NJ 450 NJ 450 NJ 450 N

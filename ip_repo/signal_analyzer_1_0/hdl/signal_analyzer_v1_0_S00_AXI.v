@@ -1211,6 +1211,12 @@
 //	(*MARK_DEBUG="true"*)
 	wire drive_level;
 
+	reg [31:0] delay_calcu_coe;
+
+	wire [31:0] time_diff;
+
+
+    wire [7:0] ch_pulse_valid;
 	// AD data filter
 	ad_data_filter #(
 		.C_AD_DATA_DEPTH(C_AD_DATA_DEPTH),
@@ -1268,8 +1274,8 @@
     32'b0;
 
 	
-	assign sort_trig_x = ((sort_compare_value_x >= sort_x_low) && (sort_compare_value_x <= sort_x_high)) || (sort_x_type == 2'b11);
-	assign sort_trig_y = ((sort_compare_value_y >= sort_y_low) && (sort_compare_value_y <= sort_y_high)) || (sort_y_type == 2'b11);
+	assign sort_trig_x = (ch_pulse_valid[sort_ch_x] && (sort_compare_value_x >= sort_x_low) && (sort_compare_value_x <= sort_x_high)) || (sort_x_type == 2'b11);
+	assign sort_trig_y = (ch_pulse_valid[sort_ch_y] && (sort_compare_value_y >= sort_y_low) && (sort_compare_value_y <= sort_y_high)) || (sort_y_type == 2'b11);
 	assign sort_trig = sort_trig_x && sort_trig_y && !event_active; // Judge trigger condition when event ends
 
 	
@@ -1285,6 +1291,7 @@
 			sort_x_high <= 32'b0;
 			sort_y_low <= 32'b0;
 			sort_y_high <= 32'b0;
+			delay_calcu_coe <= 32'b0;
 			drive_type <= 1'b0; // Default drive type
 			drive_delay <= 32'b0; // Default drive delay
 			drive_width <= 32'd100; // Default drive width
@@ -1303,7 +1310,7 @@
 			drive_delay <= slv_reg49; // Drive delay in micro
 			drive_width <= slv_reg50; // Drive width in microseconds
 			cooling_time <= slv_reg51; // Cooling time in microseconds
-
+			delay_calcu_coe <= slv_reg47;
 		end
 	end
 
@@ -1430,7 +1437,9 @@
 		.bram_we_a(bram_we_a),
 		.bram_en_a(bram_en_a),
 		.last_written_addr(last_written_addr),
-		.last_wrap_around(wrap_around)
+		.last_wrap_around(wrap_around), 
+		.measured_time_diff(time_diff),
+		.ch_pulse_valid_latched(ch_pulse_valid)
 	);
 
 
@@ -1467,10 +1476,13 @@
 		.drive_width(drive_width),
 		.cooling_time(cooling_time),
 		
+   		.measured_time_diff(time_diff[15:0]),
+    	.measured_coe(delay_calcu_coe),
+
 		.drive_state(drive_state),
 		.drive_level(drive_level)
 	);
-
+ 
 
 	// User logic ends
 

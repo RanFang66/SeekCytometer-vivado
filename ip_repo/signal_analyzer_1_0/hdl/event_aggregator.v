@@ -34,9 +34,34 @@ module event_aggregator #(
     output wire                             bram_en_a,
     output reg                              last_wrap_around, // Indicates if write pointer wrapped around
     // provide last written address for readout logic
-    output reg  [31:0] last_written_addr
+    output reg  [31:0] last_written_addr,
+    output wire [31:0] measured_time_diff,           // output measured speed (in time us)
+    output wire [7:0]  ch_pulse_valid_latched
 );
 
+    // -- channel pulse valid in pulse judgment
+    reg [NUM_CH-1 : 0] ch_pulse_valid;      // bit set 1 if there are valid pulse in correspond channel
+
+    reg [3:0] state;
+        // ------------- parameters / local -------------
+    localparam [31:0] MAGIC_WORD_HEAD = 32'h55AA55AA; // Magic word for event header
+    localparam [31:0] MAGIC_WORD_TAIL = 32'hAA55AA55; // Magic word for event tail
+    localparam [31:0] BRAM_SIZE_BYTES = 32'h00008000; 
+    localparam [31:0] BRAM_LAST_ADDR = BRAM_SIZE_BYTES - 4; // last valid address
+
+    // FSM states
+    localparam S_IDLE    = 4'd0;
+    localparam S_MAGIC_HEAD = 4'd1;
+    localparam S_HEADER  = 4'd2;
+    localparam S_TIME_DIFF = 4'd3;
+    localparam S_POST_TIME = 4'd4;    localparam S_CH_PEAK = 4'd5;
+    localparam S_CH_WIDTH= 4'd6;
+    localparam S_CH_AREA = 4'd7;
+    localparam S_MAGIC_TAIL   = 4'd8;
+    localparam S_DONE    = 4'd9;
+    
+    
+    
     assign bram_en_a = (state != S_IDLE); // BRAM is enabled when not in idle state
 
     // ------------- unpack inputs -------------
@@ -53,7 +78,8 @@ module event_aggregator #(
     endgenerate
 
     // ------------- event detection (same clk domain assumed) -------------
-    wire    event_active_masked = (ch_pulse_active & enable_mask) != {NUM_CH{1'b0}};
+    wire [NUM_CH-1 : 0] ch_pulse_active_mask = ch_pulse_active & enable_mask;
+    wire    event_active_masked = (ch_pulse_active_mask != {NUM_CH{1'b0}});
     assign  event_active = event_active_masked;//|(ch_pulse_active & enable_mask);
     // detect falling edge of event_active_masked => event_done pulse
     reg event_active_d;
@@ -63,25 +89,9 @@ module event_aggregator #(
     end
     assign event_done = (~event_active_masked) & event_active_d; // one-clock pulse when active -> inactive
 
-    // ------------- parameters / local -------------
-    localparam [31:0] MAGIC_WORD_HEAD = 32'h55AA55AA; // Magic word for event header
-    localparam [31:0] MAGIC_WORD_TAIL = 32'hAA55AA55; // Magic word for event tail
-    localparam [31:0] BRAM_SIZE_BYTES = 32'h00008000; 
-    localparam [31:0] BRAM_LAST_ADDR = BRAM_SIZE_BYTES - 4; // last valid address
 
-    // FSM states
-    localparam S_IDLE    = 4'd0;
-    localparam S_MAGIC_HEAD = 4'd1;
-    localparam S_HEADER  = 4'd2;
-    localparam S_TIME_DIFF = 4'd3;
-    localparam S_POST_TIME = 4'd4;
-    localparam S_CH_PEAK = 4'd5;
-    localparam S_CH_WIDTH= 4'd6;
-    localparam S_CH_AREA = 4'd7;
-    localparam S_MAGIC_TAIL   = 4'd8;
-    localparam S_DONE    = 4'd9;
 
-    reg [3:0] state;
+
 
     // latched copies (on event_done)
     reg [NUM_CH-1:0]                   latched_mask;
@@ -110,6 +120,8 @@ module event_aggregator #(
     reg wrap_around; // indicates if write pointer wrapped around
     reg write_wrap_now;
 
+
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wrap_around <= 1'b0;
@@ -123,7 +135,15 @@ module event_aggregator #(
         end
     end
 
-
+    assign measured_time_diff = latched_time_diff;      // output measured time difference
+    assign ch_pulse_valid_latched = ch_pulse_valid;
+    // always @(posedge clk or negedge rst_n) begin
+    //     if (!rst_n) begin
+    //         ch_pulse_valid <= {NUM_CH{1'b0}};
+    //     end else begin
+    //         if 
+    //     end
+    // end
 
 
     // ------------- sequential FSM and actions -------------
@@ -132,6 +152,7 @@ module event_aggregator #(
             state <= S_IDLE;
             event_id <= 32'd0;
             latched_mask <= {NUM_CH{1'b0}};
+            ch_pulse_valid <= {NUM_CH{1'b0}};
             for (idx = 0; idx < NUM_CH; idx = idx + 1) begin
                 latched_peak[idx]  <= {C_PEAK_BITS{1'b0}};
                 latched_width[idx] <= {C_WIDTH_BITS{1'b0}};
@@ -150,6 +171,7 @@ module event_aggregator #(
         end else begin
             // default deassert write
             bram_we_a <= 1'b0;
+            ch_pulse_valid <= (ch_pulse_valid | ch_pulse_active_mask);
             case (state)
                 S_IDLE: begin
                     // In analyze not enabled, reset state
@@ -157,6 +179,7 @@ module event_aggregator #(
                         state <= S_IDLE;
                         event_id <= 32'd0;
                         latched_mask <= {NUM_CH{1'b0}};
+                        ch_pulse_valid <= {NUM_CH{1'b0}};
                         for (idx = 0; idx < NUM_CH; idx = idx + 1) begin
                             latched_peak[idx]  <= {C_PEAK_BITS{1'b0}};
                             latched_width[idx] <= {C_WIDTH_BITS{1'b0}};
@@ -175,22 +198,36 @@ module event_aggregator #(
                     end else if (event_done) begin
                         // latch event data snapshot
                         latched_mask <= enable_mask;
+                        
                         for (idx = 0; idx < NUM_CH; idx = idx + 1) begin
-                            latched_peak[idx]  <= ch_peak[idx];
-                            latched_width[idx] <= ch_width[idx];
-                            latched_area[idx]  <= ch_area[idx];
+                            if (ch_pulse_valid[idx] == 1'b1) begin
+                                latched_peak[idx]  <= ch_peak[idx];
+                                latched_width[idx] <= ch_width[idx];
+                                latched_area[idx]  <= ch_area[idx];
+                            end else begin
+                                latched_peak[idx]  <= {C_PEAK_BITS{1'b0}};
+                                latched_width[idx] <= {C_WIDTH_BITS{1'b0}};
+                                latched_area[idx]  <= {C_AREA_BITS{1'b0}};
+                            end
                         end
-                        latched_header <= event_id[23:0]; // low 24 bits
-                        latched_header[24] <= sort_trig;                           // bit 24 indicates if event was sort trigger
-                        latched_header[25] <= sort_trig && (drive_state == 3'd0); // only valid if drive_state is idle
+                        latched_header <= event_id[19:0]; // low 20 bits
+                        latched_header[20] <= sort_trig;                           // bit 20 indicates if event was sort trigger
+                        latched_header[21] <= sort_trig && (drive_state == 3'd0); // only valid if drive_state is idle
 
                         latched_post_event_time <= speed_post_time;
                         if (time_diff < max_time_diff) begin
                             latched_time_diff <= time_diff;
-                            latched_header[26] <= 1'b1; // valid speed measurement
-                        end else begin // keep previous values                       
-                            latched_header[26] <= 1'b0; // invalid speed measurement
+                            latched_header[22] <= 1'b1; // valid speed measurement
+                        end else begin // keep previous values    
+                            latched_time_diff <= latched_time_diff;                   
+                            latched_header[22] <= 1'b0; // invalid speed measurement
                         end
+
+                        latched_header[31:24] <= ch_pulse_valid;
+                        
+                        // reset channel pulse valid flag
+                        ch_pulse_valid <= {NUM_CH{1'b0}};
+
                         // increment event_id for next event (keeps header unique)
                         event_id <= event_id + 1;
 
@@ -198,7 +235,7 @@ module event_aggregator #(
                         ch_index <= 0;
                         // go to header write state
                         state <= S_MAGIC_HEAD;
-                    end else begin
+                    end else begin                        
                         state <= S_IDLE;
                     end
                 end
@@ -217,8 +254,6 @@ module event_aggregator #(
                     bram_we_a <= 1'b1;
                     bram_addr_a <= write_addr;
                     bram_din_a <= latched_header; 
-                    // Above: place latched_mask at bits[31:24], latched_header at bits[23:0]
-                    // advance write_addr (wrap)
                     if (write_addr >= BRAM_LAST_ADDR) write_addr <= 32'd0;
                     else write_addr <= write_addr + 32'd4;   
                     // go to pre-event time state

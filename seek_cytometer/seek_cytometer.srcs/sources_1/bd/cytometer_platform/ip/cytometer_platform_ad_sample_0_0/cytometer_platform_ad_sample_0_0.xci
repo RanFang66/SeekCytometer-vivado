@@ -4,7 +4,7 @@
     "xci_name": "cytometer_platform_ad_sample_0_0",
     "cell_name": "ad_sample_0",
     "component_reference": "xilinx.com:user:ad_sample:1.0",
-    "ip_revision": "55",
+    "ip_revision": "56",
     "gen_directory": "../../../../../../seek_cytometer.gen/sources_1/bd/cytometer_platform/ip/cytometer_platform_ad_sample_0_0",
     "parameters": {
       "component_parameters": {
@@ -41,7 +41,7 @@
       },
       "runtime_parameters": {
         "IPCONTEXT": [ { "value": "IP_Integrator" } ],
-        "IPREVISION": [ { "value": "55" } ],
+        "IPREVISION": [ { "value": "56" } ],
         "MANAGED": [ { "value": "TRUE" } ],
         "OUTPUTDIR": [ { "value": "../../../../../../seek_cytometer.gen/sources_1/bd/cytometer_platform/ip/cytometer_platform_ad_sample_0_0" } ],
         "SELECTEDSIMMODEL": [ { "value": "" } ],

@@ -4,7 +4,7 @@
     "xci_name": "cytometer_platform_signal_analyzer_0_1",
     "cell_name": "signal_analyzer_0",
     "component_reference": "xilinx.com:user:signal_analyzer:1.0",
-    "ip_revision": "39",
+    "ip_revision": "42",
     "gen_directory": "../../../../../../seek_cytometer.gen/sources_1/bd/cytometer_platform/ip/cytometer_platform_signal_analyzer_0_1",
     "parameters": {
       "component_parameters": {
@@ -37,7 +37,7 @@
       },
       "runtime_parameters": {
         "IPCONTEXT": [ { "value": "IP_Integrator" } ],
-        "IPREVISION": [ { "value": "39" } ],
+        "IPREVISION": [ { "value": "42" } ],
         "MANAGED": [ { "value": "TRUE" } ],
         "OUTPUTDIR": [ { "value": "../../../../../../seek_cytometer.gen/sources_1/bd/cytometer_platform/ip/cytometer_platform_signal_analyzer_0_1" } ],
         "SELECTEDSIMMODEL": [ { "value": "" } ],
