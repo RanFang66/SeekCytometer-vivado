@@ -2,7 +2,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 // AD7606C-18 Parallel Interface (Final Optimized Pipeline Version)
 // 
-// 基于原始代码架构，保持双状态机流水线设计
+// 基于原始代码架构，保持双状�?�机流水线设�?
 //////////////////////////////////////////////////////////////////////////////////
 
 module ad_7606c_if #(
@@ -14,7 +14,7 @@ module ad_7606c_if #(
 
     parameter integer RD_LOW_CYCLES         = 6,    // 30ns (spec: >=10ns)
     parameter integer RD_CYCLE_CYCLES       = 10,   // 50ns full RD cycle
-    parameter integer RD_DATA_SAMPLE        = 5,    // 25ns后采样数据
+    parameter integer RD_DATA_SAMPLE        = 5,    // 25ns后采样数�?
     
     // Configuration write timing
     parameter integer CFG_SETUP_CYCLES      = 6,    // 30ns
@@ -170,7 +170,7 @@ function [15:0] cfgw_word(input [2:0] idx);
             // 0x06: CH7_CH8 Range
             3'd3: cfgw_word = {1'b0, 7'h06, 8'h11};
             // 0x07: Bandwidth = 0xFF (all channels high bandwidth)
-            3'd4: cfgw_word = {1'b0, 7'h07, 8'h55};
+            3'd4: cfgw_word = {1'b0, 7'h07, 8'hFF};
             default: cfgw_word = 16'h0000;
         endcase
     end
