@@ -15,6 +15,7 @@ module event_aggregator #(
     input  wire signed [C_AREA_BITS * NUM_CH-1:0] ch_area_flat,
     input  wire [32*NUM_CH-1:0]        ch_peak_time_flat,
     input  wire                     sort_trig,
+    input  wire                     sort_ready,     // gate judge result is available
     input  wire [2:0]               drive_state,
 
 
@@ -59,10 +60,11 @@ module event_aggregator #(
     localparam S_CH_AREA = 4'd7;
     localparam S_MAGIC_TAIL   = 4'd8;
     localparam S_DONE    = 4'd9;
+    localparam S_WAIT_GATE   = 4'd10;
     
     
     
-    assign bram_en_a = (state != S_IDLE); // BRAM is enabled when not in idle state
+    assign bram_en_a = (state != S_IDLE) && (state != S_WAIT_GATE); // BRAM is enabled during write states
 
     // ------------- unpack inputs -------------
     wire signed [C_PEAK_BITS-1:0] ch_peak [0:NUM_CH-1];
@@ -211,20 +213,19 @@ module event_aggregator #(
                             end
                         end
                         latched_header <= event_id[19:0]; // low 20 bits
-                        latched_header[20] <= sort_trig;                           // bit 20 indicates if event was sort trigger
-                        latched_header[21] <= sort_trig && (drive_state == 3'd0); // only valid if drive_state is idle
+                        // bits [20:21] will be set in S_WAIT_GATE after gate judge completes
 
                         latched_post_event_time <= speed_post_time;
                         if (time_diff < max_time_diff) begin
                             latched_time_diff <= time_diff;
                             latched_header[22] <= 1'b1; // valid speed measurement
-                        end else begin // keep previous values    
-                            latched_time_diff <= latched_time_diff;                   
+                        end else begin // keep previous values
+                            latched_time_diff <= latched_time_diff;
                             latched_header[22] <= 1'b0; // invalid speed measurement
                         end
 
                         latched_header[31:24] <= ch_pulse_valid;
-                        
+
                         // reset channel pulse valid flag
                         ch_pulse_valid <= {NUM_CH{1'b0}};
 
@@ -233,10 +234,19 @@ module event_aggregator #(
 
                         // init channel iterator
                         ch_index <= 0;
-                        // go to header write state
-                        state <= S_MAGIC_HEAD;
+                        // wait for gate judge result before writing
+                        state <= S_WAIT_GATE;
                     end else begin                        
                         state <= S_IDLE;
+                    end
+                end
+
+                S_WAIT_GATE: begin
+                    // Wait for gate judge pipeline to complete
+                    if (sort_ready) begin
+                        latched_header[20] <= sort_trig;                           // bit 20 indicates if event was sort trigger
+                        latched_header[21] <= sort_trig && (drive_state == 3'd0); // only valid if drive_state is idle
+                        state <= S_MAGIC_HEAD;
                     end
                 end
 
@@ -246,7 +256,7 @@ module event_aggregator #(
                     bram_addr_a <= write_addr;
                     bram_din_a <= MAGIC_WORD_HEAD;
                     if (write_addr >= BRAM_LAST_ADDR) write_addr <= 32'd0;
-                    else write_addr <= write_addr + 32'd4; 
+                    else write_addr <= write_addr + 32'd4;
                     state <= S_HEADER; // go to header state
                 end
 

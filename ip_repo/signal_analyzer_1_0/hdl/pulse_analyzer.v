@@ -52,7 +52,7 @@ module pulse_analyzer #(
   reg [$clog2(C_DEBOUNCE_LEN+1)-1:0] rise_count;
   reg [$clog2(C_DEBOUNCE_LEN+1)-1:0] fall_count;
 
-  always @(posedge clk) begin
+  always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       in_pulse     <= 1'b0;
       pulse_active <= 1'b0;

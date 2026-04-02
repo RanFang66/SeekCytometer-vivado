@@ -58,7 +58,7 @@ integer ch;
 
 
 
-always @(posedge clk) begin
+always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         for (ch = 0; ch < 8; ch = ch + 1) begin
             ad_ch_val_dly0[ch]      <= {C_AD_DATA_DEPTH{1'b0}};
@@ -102,7 +102,7 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk) begin
+always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         ad_ch1_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
         ad_ch2_val_filt <= {C_AD_DATA_DEPTH{1'b0}};

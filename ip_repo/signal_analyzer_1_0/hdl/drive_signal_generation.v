@@ -6,8 +6,9 @@
     input wire rst_n,
     input wire sort_en,
     input wire sort_trig,
+    input wire sort_abort,  // High-purity mode: abort pending sort in S_DRIVE_WAIT
     input wire drive_type,  // 0: Level, 1: Edge
-    input wire [31:0] time_us,
+    input wire [63:0] time_us,
     input wire [31:0] drive_delay,
     input wire [31:0] drive_width,
     input wire [31:0] cooling_time,
@@ -22,9 +23,9 @@
     localparam 			integer S_DRIVE_HIGH = 3'd2;
     localparam 			integer S_DRIVE_COOLDOWN = 3'd3;
 
-    reg [31:0]          time_drive_start;
-    reg [31:0]          time_drive_end;
-    reg [31:0]          time_drive_cooling_end;
+    reg [63:0]          time_drive_start;
+    reg [63:0]          time_drive_end;
+    reg [63:0]          time_drive_cooling_end;
     reg                 drive_level_edge;
     reg [47:0]          delay_calculated;           // 32 + 16
     reg [47:0]          delay_total;
@@ -65,9 +66,9 @@
         begin
             drive_state <= 3'd0;
             drive_level_edge <= 1'b0;
-            time_drive_start <= 32'd0;
-            time_drive_end <= 32'd0;
-            time_drive_cooling_end <= 32'd0;
+            time_drive_start <= 64'd0;
+            time_drive_end <= 64'd0;
+            time_drive_cooling_end <= 64'd0;
         end else begin
             case (drive_state)
                 S_DRIVE_IDLE:
@@ -75,24 +76,26 @@
                     if (sort_start)
                     begin
                         drive_state <= S_DRIVE_WAIT;
-                        time_drive_start <= (time_us + delay_total[31:0]);
+                        time_drive_start <= time_us + {16'd0, delay_total};
                     end	
                 end
                 S_DRIVE_WAIT:
                 begin
-                    if (time_us >= time_drive_start)
-                    begin
+                    if (sort_abort) begin
+                        // High-purity mode: abort sort if non-sort event too close
+                        drive_state <= S_DRIVE_IDLE;
+                    end else if (time_us >= time_drive_start) begin
                         drive_state <= S_DRIVE_HIGH;
-                        time_drive_end <= drive_type ? (time_us + 32'd10) : (time_us + drive_width); 
+                        time_drive_end <= drive_type ? (time_us + 64'd10) : (time_us + {32'd0, drive_width});
                         drive_level_edge <= ~drive_level_edge;
-                    end 
-                end	
+                    end
+                end
                 S_DRIVE_HIGH:
                 begin
                     if (time_us >= time_drive_end)
                     begin
                         drive_state <= S_DRIVE_COOLDOWN;
-                        time_drive_cooling_end <= (time_us + cooling_time);
+                        time_drive_cooling_end <= time_us + {32'd0, cooling_time};
                     end 
                 end
                 S_DRIVE_COOLDOWN:
@@ -105,9 +108,9 @@
                 default:
                 begin
                     drive_state <= S_DRIVE_IDLE;
-                    time_drive_start <= 32'd0;
-                    time_drive_end <= 32'd0;
-                    time_drive_cooling_end <= 32'd0;
+                    time_drive_start <= 64'd0;
+                    time_drive_end <= 64'd0;
+                    time_drive_cooling_end <= 64'd0;
                 end
             endcase
         end

@@ -34,10 +34,10 @@
 		output wire [2:0] drive_state_out,
 		output wire drive_level_out,
 
-		wire [31:0] bram_din_a, // Data to write to BRAM
-		wire [31:0] bram_addr_a, // Address in BRAM
-		wire bram_we_a, // Write enable for BRAM
-		wire bram_en_a, // Enable signal for BRAM
+		output wire [31:0] bram_din_a, // Data to write to BRAM
+		output wire [31:0] bram_addr_a, // Address in BRAM
+		output wire bram_we_a, // Write enable for BRAM
+		output wire bram_en_a, // Enable signal for BRAM
 
 
 		// User ports ends
@@ -230,14 +230,14 @@
 
 
 	// Assign threshold values from slave registers
-	assign threshold_value[0] = slv_reg16[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[1] = slv_reg17[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[2] = slv_reg18[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[3] = slv_reg19[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[4] = slv_reg20[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[5] = slv_reg21[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[6] = slv_reg22[(C_AD_DATA_DEPTH-1):0];
-	assign threshold_value[7] = slv_reg23[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[0] = slv_reg8[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[1] = slv_reg9[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[2] = slv_reg10[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[3] = slv_reg11[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[4] = slv_reg12[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[5] = slv_reg13[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[6] = slv_reg14[(C_AD_DATA_DEPTH-1):0];
+	assign threshold_value[7] = slv_reg15[(C_AD_DATA_DEPTH-1):0];
 
 	// Assign ADC data to an array for easier access
 	wire signed [C_AD_DATA_DEPTH-1:0]  ad_data_array [C_AD_CHANNEL_NUM-1:0];
@@ -1194,13 +1194,6 @@
 //	(*MARK_DEBUG="true"*)
 	reg [1:0] sort_y_type;
 //	(*MARK_DEBUG="true"*)
-	reg signed [31:0] sort_x_low;
-//	(*MARK_DEBUG="true"*)
-	reg signed [31:0] sort_x_high;
-	reg signed [31:0] sort_y_low;
-	reg signed [31:0] sort_y_high;
-
-//	(*MARK_DEBUG="true"*)
 	reg drive_type;
 //	(*MARK_DEBUG="true"*)
 	reg [31:0] drive_delay;
@@ -1212,6 +1205,8 @@
 	wire drive_level;
 
 	reg [31:0] delay_calcu_coe;
+	reg purity_en;
+	reg [31:0] min_event_interval;
 
 	wire [31:0] time_diff;
 
@@ -1251,32 +1246,116 @@
 	assign drive_state_out = drive_state;
 	assign drive_level_out = drive_level;
 
-//	(*MARK_DEBUG="true"*)	
-	wire sort_trig_x;
-//	(*MARK_DEBUG="true"*)
-	wire sort_trig_y;
-//	(*MARK_DEBUG="true"*)
-	wire sort_trig;
-
+	// -- Sort coordinate selection (channel + parameter type) --
 	wire signed [31:0] sort_compare_value_x;
 	wire signed [31:0] sort_compare_value_y;
 
-	assign sort_compare_value_x = 
+	assign sort_compare_value_x =
     (sort_x_type == 2'b00) ?  {{(32-C_AD_DATA_DEPTH){pulse_peak[sort_ch_x][C_AD_DATA_DEPTH-1]}}, pulse_peak[sort_ch_x]}:
     (sort_x_type == 2'b01) ? {{16'b0}, pulse_width[sort_ch_x]} :
     (sort_x_type == 2'b10) ? pulse_area[sort_ch_x] :
     32'b0;
 
-	assign sort_compare_value_y = 
+	assign sort_compare_value_y =
     (sort_y_type == 2'b00) ? {{(32-C_AD_DATA_DEPTH){pulse_peak[sort_ch_y][C_AD_DATA_DEPTH-1]}}, pulse_peak[sort_ch_y]}:
     (sort_y_type == 2'b01) ? {{16'b0}, pulse_width[sort_ch_y]} :
     (sort_y_type == 2'b10) ? pulse_area[sort_ch_y] :
     32'b0;
 
-	
-	assign sort_trig_x = (ch_pulse_valid[sort_ch_x] && (sort_compare_value_x >= sort_x_low) && (sort_compare_value_x <= sort_x_high)) || (sort_x_type == 2'b11);
-	assign sort_trig_y = (ch_pulse_valid[sort_ch_y] && (sort_compare_value_y >= sort_y_low) && (sort_compare_value_y <= sort_y_high)) || (sort_y_type == 2'b11);
-	assign sort_trig = sort_trig_x && sort_trig_y && !event_active; // Judge trigger condition when event ends
+	// -- Gate judge pipeline for sorting decision --
+	// slv_reg17: [2:0]=gate_type, [7:4]=gate_points_num
+	// slv_reg18~29: gate_points_x[0..11]
+	// slv_reg30~41: gate_points_y[0..11]
+	wire gate_valid_out;
+	wire gate_result_out;
+
+	wire [32*12-1:0] gate_points_x_pack = {
+		slv_reg29, slv_reg28, slv_reg27, slv_reg26, slv_reg25, slv_reg24,
+		slv_reg23, slv_reg22, slv_reg21, slv_reg20, slv_reg19, slv_reg18
+	};
+	wire [32*12-1:0] gate_points_y_pack = {
+		slv_reg41, slv_reg40, slv_reg39, slv_reg38, slv_reg37, slv_reg36,
+		slv_reg35, slv_reg34, slv_reg33, slv_reg32, slv_reg31, slv_reg30
+	};
+
+	gate_judge_pipeline #(
+		.C_NUM_MAX_POINTS(12),
+		.C_POINT_DATA_WIDTH(32)
+	) u_gate_judge (
+		.rst_n(S_AXI_ARESETN),
+		.sys_clk(S_AXI_ACLK),
+		.enable(1'b1),
+		.trigger(event_done),
+		.point_x(sort_compare_value_x),
+		.point_y(sort_compare_value_y),
+		.gate_type(slv_reg17[2:0]),
+		.gate_points_num(slv_reg17[7:4]),
+		.gate_points_x_pack(gate_points_x_pack),
+		.gate_points_y_pack(gate_points_y_pack),
+		.valid(gate_valid_out),
+		.result(gate_result_out)
+	);
+
+	// Latch channel validity and gate result for sort trigger
+	reg ch_sort_valid_latched;
+	reg sort_trig_reg;
+	reg sort_ready;
+
+	// High-purity mode: track event history for interval-based suppression/abort
+	reg [63:0] current_event_time;
+	reg [63:0] last_event_time;
+	reg last_event_was_sort;
+	reg sort_abort;
+
+	wire current_event_is_sort = sort_en && gate_result_out && ch_sort_valid_latched;
+	wire [63:0] event_interval = current_event_time - last_event_time;
+	wire interval_too_close = (event_interval < {32'd0, min_event_interval});
+
+	// Purity suppress: current is sort, previous was NOT sort, interval too close
+	// Exception: if both consecutive events are sort -> always sort
+	wire purity_suppress = purity_en && !last_event_was_sort && interval_too_close;
+
+	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
+		if (!S_AXI_ARESETN) begin
+			ch_sort_valid_latched <= 1'b0;
+			sort_trig_reg <= 1'b0;
+			sort_ready <= 1'b0;
+			current_event_time <= 64'd0;
+			last_event_time <= 64'd0;
+			last_event_was_sort <= 1'b0;
+			sort_abort <= 1'b0;
+		end else begin
+			sort_abort <= 1'b0; // default: single-cycle pulse
+
+			if (event_done) begin
+				ch_sort_valid_latched <= ch_pulse_valid[sort_ch_x] && ch_pulse_valid[sort_ch_y];
+				current_event_time <= time_stamp_us;
+				sort_ready <= 1'b0;
+			end
+
+			if (gate_valid_out) begin
+				// Determine sort trigger with purity suppression
+				if (current_event_is_sort && !purity_suppress) begin
+					sort_trig_reg <= 1'b1;
+				end else begin
+					sort_trig_reg <= 1'b0;
+				end
+
+				// Purity abort: non-sort event too close -> abort pending drive
+				if (purity_en && !current_event_is_sort && interval_too_close) begin
+					sort_abort <= 1'b1;
+				end
+
+				sort_ready <= 1'b1;
+
+				// Update event history
+				last_event_time <= current_event_time;
+				last_event_was_sort <= current_event_is_sort;
+			end
+		end
+	end
+
+	wire sort_trig = sort_trig_reg;
 
 	
 
@@ -1287,42 +1366,29 @@
 			sort_ch_y <= 3'b0;
 			sort_x_type <= 2'b0;
 			sort_y_type <= 2'b0;
-			sort_x_low <= 32'b0;
-			sort_x_high <= 32'b0;
-			sort_y_low <= 32'b0;
-			sort_y_high <= 32'b0;
 			delay_calcu_coe <= 32'b0;
 			drive_type <= 1'b0; // Default drive type
 			drive_delay <= 32'b0; // Default drive delay
 			drive_width <= 32'd100; // Default drive width
 			cooling_time <= 32'd100; // Default cooling time
+			purity_en <= 1'b0;
+			min_event_interval <= 32'd0;
 		end else begin
-			sort_ch_x <= slv_reg24[2:0]; // Channel number for X axis sorting
-			sort_x_type <= slv_reg24[9:8]; // Type of sorting for X axis
-			sort_ch_y <= slv_reg24[18:16]; // Channel number for Y axis sorting
-			sort_y_type <= slv_reg24[25:24]; // Type of sorting for Y axis
-			sort_x_low <= slv_reg32; // Low threshold for X axis
-			sort_x_high <= slv_reg33; // High threshold for X axis
-			sort_y_low <= slv_reg40; // Low threshold for Y axis
-			sort_y_high <= slv_reg41; // High threshold for Y axis
+			sort_ch_x <= slv_reg16[2:0]; // Channel number for X axis sorting
+			sort_x_type <= slv_reg16[9:8]; // Type of sorting for X axis
+			sort_ch_y <= slv_reg16[18:16]; // Channel number for Y axis sorting
+			sort_y_type <= slv_reg16[25:24]; // Type of sorting for Y axis
 
 			drive_type <= slv_reg48[0]; // Drive type: 0 for level, 1 for edge
+			purity_en <= slv_reg48[1]; // High-purity mode enable
 			drive_delay <= slv_reg49; // Drive delay in micro
 			drive_width <= slv_reg50; // Drive width in microseconds
 			cooling_time <= slv_reg51; // Cooling time in microseconds
 			delay_calcu_coe <= slv_reg47;
+			min_event_interval <= slv_reg55; // Min interval between events for purity mode (us)
 		end
 	end
 
-	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
-		if (!S_AXI_ARESETN) begin
-			
-		end else begin
-			if (event_done) begin
-
-			end
-		end
-	end
 
 	// Get 1us time stamp
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
@@ -1394,7 +1460,7 @@
 			.time_stamp_in(time_stamp_us),
 			.sample_valid(ad_data_updated),
 			.sample_in(ad_data_array[i]),
-			.enabled((enabled_channels[i] | (speed_pre == i)) & analyze_en),
+			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
 			.pulse_active(pulse_active[i]),
 			.width_out(pulse_width[i]),
@@ -1426,6 +1492,7 @@
 		.max_time_diff(max_time_diff),
 		
 		.sort_trig(sort_trig),
+		.sort_ready(sort_ready),
 		.drive_state(drive_state),
 
 		.event_id(event_counter),
@@ -1470,12 +1537,13 @@
 		.rst_n(S_AXI_ARESETN),
 		.sort_en(sort_en),
 		.sort_trig(sort_trig),
+		.sort_abort(sort_abort),
 		.drive_type(drive_type),
 		.time_us(time_stamp_us),
 		.drive_delay(drive_delay),
 		.drive_width(drive_width),
 		.cooling_time(cooling_time),
-		
+
    		.measured_time_diff(time_diff[15:0]),
     	.measured_coe(delay_calcu_coe),
 
