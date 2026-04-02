@@ -43,10 +43,12 @@ module gate_judge_pipeline #(
     localparam MW = DW * 2;                 // multiply result width
 
     // Gate type encoding
-    localparam [2:0] GT_INTERVAL  = 3'd1,
+    localparam [2:0] GT_NO_GATE   = 3'd0,
+                     GT_INTERVAL  = 3'd1,
                      GT_RECTANGLE = 3'd2,
                      GT_POLYGON   = 3'd3,
-                     GT_ELLIPSE   = 3'd4;
+                     GT_ELLIPSE   = 3'd4,
+                     GT_ALL       = 3'd5;
 
     // FSM states
     localparam [1:0] S_IDLE = 2'd0,
@@ -262,6 +264,12 @@ module gate_judge_pipeline #(
                 // ---------------------------------------------------------
                 S_CALC: begin
                     case (gtype)
+                        GT_NO_GATE: begin               // never sort when there is no gate
+                            result_reg <= 1'b0;
+                            valid_reg <= 1'b1;
+                            state <= S_IDLE;
+                        end
+
                         // --- Interval: 1 cycle ---
                         GT_INTERVAL: begin
                             result_reg <= intv_result;
@@ -317,6 +325,13 @@ module gate_judge_pipeline #(
                                 valid_reg  <= 1'b1;
                                 state      <= S_IDLE;
                             end
+                        end
+
+                        // --- All sort
+                        GT_ALL: begin                   // always sort
+                            result_reg <= 1'b1;
+                            valid_reg <= 1'b1;
+                            state <= S_IDLE;
                         end
 
                         // --- Unknown type: default to not-in-gate ---

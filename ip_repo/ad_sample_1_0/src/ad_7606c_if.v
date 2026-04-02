@@ -24,28 +24,18 @@ module ad_7606c_if #(
     input              ad_clk,         // 200MHz clk
     input              rst_n,
      
-    (* MARK_DEBUG = "true" *)
     inout  [15:0]      ad_data,
-    (* MARK_DEBUG = "true" *)
     input              ad_busy,
-    (* MARK_DEBUG = "true" *)
     input              first_data,
 
     output [2:0]       ad_os,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_cs,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_rd,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_wr,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_reset,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_convstab,
-    (* MARK_DEBUG = "true" *)
     output reg         ad_data_valid,
 
-    (* MARK_DEBUG = "true" *)
     output reg [17:0]  ad_ch1_val,
     output reg [17:0]  ad_ch2_val,
     output reg [17:0]  ad_ch3_val,
@@ -58,11 +48,8 @@ module ad_7606c_if #(
 
 assign ad_os = 3'b111;   // Software mode
 
-(* MARK_DEBUG = "true" *)
 wire [15:0] db_in;
-(* MARK_DEBUG = "true" *)
 reg  [15:0] db_out;
-(* MARK_DEBUG = "true" *)
 reg         db_oe; 
 
 // ========================================================
@@ -73,11 +60,8 @@ localparam S_READ_MSB = 2'd1;
 localparam S_READ_LSB = 2'd2;
 localparam S_DONE     = 2'd3;
 
-(* MARK_DEBUG = "true" *)
 reg [1:0]  ad_rd_state;
-(* MARK_DEBUG = "true" *)
 reg [4:0]  rd_cnt;
-(* MARK_DEBUG = "true" *)
 reg [2:0]  channel_idx;
 reg [17:0] channel_buffer [0:7];
 reg [2:0]  valid_hold_cnt;
@@ -92,13 +76,9 @@ localparam CFGW_IDLE  = 3'd0,
            CFGW_NEXT  = 3'd4,
            CFGW_DONE  = 3'd5;
 
-(* MARK_DEBUG = "true" *)
 reg [2:0] cfgw_state;
-(* MARK_DEBUG = "true" *)
 reg [5:0] cfgw_cnt;
-(* MARK_DEBUG = "true" *)
 reg [2:0] cfgw_idx;
-(* MARK_DEBUG = "true" *)
 reg       cfgw_done;
 
 // ========================================================
@@ -111,11 +91,8 @@ localparam S_CONV_RELEASE     = 3'd3;
 localparam S_CONV_WAIT_FIRST  = 3'd4;
 localparam S_CONV_WAIT_BUSY   = 3'd5;
 
-(* MARK_DEBUG = "true" *)
 reg [2:0]  conv_state;
-(* MARK_DEBUG = "true" *)
 reg [7:0]  conv_cnt;
-(* MARK_DEBUG = "true" *)
 reg        start_read;
 
 // ========================================================

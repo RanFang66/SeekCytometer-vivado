@@ -226,8 +226,9 @@ gate_judge_pipeline #(
 | slv_reg2-7 | 0x08-0x1C | 未使用/保留 | R/W |
 | slv_reg8-15 | 0x20-0x3C | 通道0-7阈值 | R/W |
 | slv_reg16 | 0x40 | 分选参数配置 | R/W |
-| slv_reg32-33 | 0x80-0x84 | X轴门控范围 | R/W |
-| slv_reg40-41 | 0xA0-0xA4 | Y轴门控范围 | R/W |
+| slv_reg17 | 0x44 | 门控类型[2:0]和门控数据点数[7:4] | R/W |
+| slv_reg18-29 | 0x48-0x84 | X轴门控范围 | R/W |
+| slv_reg30-41 | 0x88-0xA4 | Y轴门控范围 | R/W |
 | slv_reg47 | 0xBC | delay_calcu_coe | R/W |
 | slv_reg48 | 0xC0 | [0]=drive_type, [1]=purity_en | R/W |
 | slv_reg49 | 0xC4 | drive_delay | R/W |

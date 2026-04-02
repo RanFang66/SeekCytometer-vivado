@@ -32,7 +32,7 @@ module pulse_analyzer #(
   input  wire                          enabled,
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
   output reg                           pulse_active,   // high while in pulse
-  output reg                           event_done,     // one clock pulse at pulse end
+  output reg                           pulse_done,     // one clock pulse at pulse end
   output reg signed [C_AD_DATA_DEPTH-1:0] peak_out,
   output reg [31:0]                    peak_time_out, // in clock cycles
   output reg [15:0]                    width_out,      // in samples
@@ -56,7 +56,7 @@ module pulse_analyzer #(
     if (!rst_n) begin
       in_pulse     <= 1'b0;
       pulse_active <= 1'b0;
-      event_done   <= 1'b0;
+      pulse_done   <= 1'b0;
       peak_reg     <= {C_AD_DATA_DEPTH{1'b0}};
       width_reg    <= 16'd0;
       area_reg     <= {C_AREA_WIDTH{1'b0}};
@@ -68,7 +68,7 @@ module pulse_analyzer #(
       rise_count   <= 0;
       fall_count   <= 0;
     end else begin
-      event_done <= 1'b0; // default
+      pulse_done <= 1'b0; // default
 
       if (sample_valid && enabled) begin
         if (!in_pulse) begin
@@ -109,11 +109,11 @@ module pulse_analyzer #(
             fall_count <= 0;
           end
 
-          // If below threshold for debounce length ï¿½? end pulse
+          // If below threshold for debounce length ï¿?? end pulse
           if (fall_count >= C_DEBOUNCE_LEN) begin
             in_pulse     <= 1'b0;
             pulse_active <= 1'b0;
-            event_done   <= 1'b1;
+            pulse_done   <= 1'b1;
             peak_out     <= peak_reg;
             width_out    <= width_reg;
             area_out     <= area_reg;

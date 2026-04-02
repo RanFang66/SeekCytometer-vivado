@@ -260,6 +260,7 @@
 	wire [31:0] peak_time [C_AD_CHANNEL_NUM-1:0];
 	// (*MARK_DEBUG="true"*)
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_active;
+	wire [C_AD_CHANNEL_NUM-1:0] pulse_done;
 
 
 	wire signed [C_AD_CHANNEL_NUM*18-1:0] ch_peak_flat;
@@ -1463,6 +1464,7 @@
 			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
 			.pulse_active(pulse_active[i]),
+			.pulse_done(pulse_done[i]),
 			.width_out(pulse_width[i]),
 			.peak_out(pulse_peak[i]),
 			.area_out(pulse_area[i]),
