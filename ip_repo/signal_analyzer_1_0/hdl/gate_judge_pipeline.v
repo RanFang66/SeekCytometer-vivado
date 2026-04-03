@@ -17,7 +17,7 @@
 //  Latency from trigger rising edge to valid output:
 //    Interval / Rectangle :  1 cycle
 //    Polygon (N edges)    :  N + 2 cycles  (max 14 for N=12)
-//    Ellipse              :  4 cycles
+//    Ellipse              :  5 cycles  (4-stage pipeline + result latch)
 //////////////////////////////////////////////////////////////////////////////////
 
 module gate_judge_pipeline #(
@@ -162,13 +162,16 @@ module gate_judge_pipeline #(
     wire signed [DW-1:0] vy2 = gy[next_idx];
 
     // =========================================================================
-    //  Ellipse — free-running 3-stage pipeline
+    //  Ellipse — free-running 4-stage pipeline
     //
     //  Ellipse defined by bounding rectangle: (gx[0],gy[0]) to (gx[1],gy[1]).
     //  Test:  dx²·sb² + dy²·sa² ≤ sa²·sb²
     //  where  dx = 2·px-(x0+x1),  dy = 2·py-(y0+y1),
     //         sa = x1-x0,          sb = y1-y0   (all doubled semi-axes).
     //  Pure integer arithmetic, no division.
+    //
+    //  Stage 1: differences    Stage 2: squares
+    //  Stage 3: cross products Stage 4: addition + comparison (registered)
     // =========================================================================
 
     // --- Stage 1: differences (registered) ---
@@ -216,8 +219,17 @@ module gate_judge_pipeline #(
         end
     end
 
-    // --- Final compare (combinational) ---
-    wire ell_result = (ell_t1 + ell_t2 <= ell_rhs);
+    // --- Stage 4: addition + comparison (registered) ---
+    reg ell_result_r;
+
+    always @(posedge sys_clk or negedge rst_n) begin
+        if (!rst_n)
+            ell_result_r <= 1'b0;
+        else
+            ell_result_r <= (ell_t1 + ell_t2 <= ell_rhs);
+    end
+
+    wire ell_result = ell_result_r;
 
     // --- Ellipse cycle counter ---
     reg [2:0] ell_cnt;
@@ -320,7 +332,7 @@ module gate_judge_pipeline #(
                         // --- Ellipse: wait for 3-stage pipeline ---
                         GT_ELLIPSE: begin
                             ell_cnt <= ell_cnt + 1'b1;
-                            if (ell_cnt == 3'd3) begin
+                            if (ell_cnt == 3'd4) begin
                                 result_reg <= ell_result;
                                 valid_reg  <= 1'b1;
                                 state      <= S_IDLE;
