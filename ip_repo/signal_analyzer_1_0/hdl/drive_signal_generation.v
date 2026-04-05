@@ -5,16 +5,24 @@
     input wire clk,
     input wire rst_n,
     input wire sort_en,
+    (*MARK_DEBUG="true"*)
     input wire sort_trig,
+    (*MARK_DEBUG="true"*)
     input wire sort_abort,  // High-purity mode: abort pending sort in S_DRIVE_WAIT
     input wire drive_type,  // 0: Level, 1: Edge
+    (*MARK_DEBUG="true"*)
     input wire [63:0] time_us,
+    (*MARK_DEBUG="true"*)
+    input wire [63:0] event_peak_time, 
     input wire [31:0] drive_delay,
     input wire [31:0] drive_width,
     input wire [31:0] cooling_time,
     input wire [15:0] measured_time_diff,
     input wire [31:0] measured_coe,
+
+    (*MARK_DEBUG="true"*)
     output reg [2:0]  drive_state,
+    (*MARK_DEBUG="true"*)
     output wire        drive_level
 );
 
@@ -23,10 +31,16 @@
     localparam 			integer S_DRIVE_HIGH = 3'd2;
     localparam 			integer S_DRIVE_COOLDOWN = 3'd3;
 
+
+    (*MARK_DEBUG="true"*)
     reg [63:0]          time_drive_start;
+    (*MARK_DEBUG="true"*)
     reg [63:0]          time_drive_end;
+    (*MARK_DEBUG="true"*)
     reg [63:0]          time_drive_cooling_end;
+    (*MARK_DEBUG="true"*)
     reg                 drive_level_edge;
+    (*MARK_DEBUG="true"*)
     reg [47:0]          delay_calculated;           // 32 + 16
     reg [47:0]          delay_total;
 
@@ -76,7 +90,11 @@
                     if (sort_start)
                     begin
                         drive_state <= S_DRIVE_WAIT;
-                        time_drive_start <= time_us + {16'd0, delay_total};
+                        if (event_peak_time < time_us) begin
+                            time_drive_start <= event_peak_time + {16'd0, delay_total};
+                        end else begin
+                            time_drive_start <= time_us + {16'd0, delay_total};
+                        end
                     end	
                 end
                 S_DRIVE_WAIT:

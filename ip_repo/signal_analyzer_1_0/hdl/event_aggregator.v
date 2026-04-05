@@ -13,7 +13,7 @@ module event_aggregator #(
     input  wire signed [C_PEAK_BITS * NUM_CH-1:0] ch_peak_flat,
     input  wire [C_WIDTH_BITS * NUM_CH-1:0]       ch_width_flat,
     input  wire signed [C_AREA_BITS * NUM_CH-1:0] ch_area_flat,
-    input  wire [32*NUM_CH-1:0]        ch_peak_time_flat,
+    input  wire [64*NUM_CH-1:0]        ch_peak_time_flat,
     input  wire                     sort_trig,
     input  wire                     sort_ready,     // gate judge result is available
     input  wire [2:0]               drive_state,
@@ -110,13 +110,13 @@ module event_aggregator #(
 
     // Speed measurement module
 //    (*MARK_DEBUG="true"*)
-    wire [31:0] speed_pre_time = ch_peak_time_flat[speed_pre_channel*32 +: 32];
+    wire [63:0] speed_pre_time = ch_peak_time_flat[speed_pre_channel*64 +: 64];
 //    (*MARK_DEBUG="true"*)
-    wire [31:0] speed_post_time = ch_peak_time_flat[speed_post_channel*32 +: 32];
+    wire [63:0] speed_post_time = ch_peak_time_flat[speed_post_channel*64 +: 64];
     reg [31:0] latched_time_diff;
     reg [31:0] latched_post_event_time;
 //    (*MARK_DEBUG="true"*)
-    wire[31:0] time_diff = speed_post_time - speed_pre_time;
+    wire[63:0] time_diff = speed_post_time - speed_pre_time;
 
     integer idx;
     reg wrap_around; // indicates if write pointer wrapped around
@@ -217,7 +217,7 @@ module event_aggregator #(
 
                         latched_post_event_time <= speed_post_time;
                         if (time_diff < max_time_diff) begin
-                            latched_time_diff <= time_diff;
+                            latched_time_diff <= time_diff[31:0];
                             latched_header[22] <= 1'b1; // valid speed measurement
                         end else begin // keep previous values
                             latched_time_diff <= latched_time_diff;

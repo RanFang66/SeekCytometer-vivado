@@ -34,7 +34,7 @@ module pulse_analyzer #(
   output reg                           pulse_active,   // high while in pulse
   output reg                           pulse_done,     // one clock pulse at pulse end
   output reg signed [C_AD_DATA_DEPTH-1:0] peak_out,
-  output reg [31:0]                    peak_time_out, // in clock cycles
+  output reg [63:0]                    peak_time_out, // in clock cycles
   output reg [15:0]                    width_out,      // in samples
   output reg signed [C_AREA_WIDTH-1:0] area_out
 );
@@ -45,7 +45,7 @@ module pulse_analyzer #(
   reg signed [C_AD_DATA_DEPTH-1:0] peak_reg;
   reg [15:0] width_reg;
   reg signed [C_AREA_WIDTH-1:0] area_reg;
-  reg [31:0] peak_time_reg;
+  reg [63:0] peak_time_reg;
   reg in_pulse;
 
   // Debounce counters
@@ -60,11 +60,11 @@ module pulse_analyzer #(
       peak_reg     <= {C_AD_DATA_DEPTH{1'b0}};
       width_reg    <= 16'd0;
       area_reg     <= {C_AREA_WIDTH{1'b0}};
-      peak_time_reg <= 32'd0;
+      peak_time_reg <= 64'd0;
       peak_out     <= {C_AD_DATA_DEPTH{1'b0}};
       width_out    <= 16'd0;
       area_out     <= {C_AREA_WIDTH{1'b0}};
-      peak_time_out <= 32'd0;
+      peak_time_out <= 64'd0;
       rise_count   <= 0;
       fall_count   <= 0;
     end else begin
@@ -87,7 +87,7 @@ module pulse_analyzer #(
             peak_reg     <= sample_in;
             width_reg    <= 16'd1;
             area_reg     <= $signed({{(C_AREA_WIDTH-C_AD_DATA_DEPTH){sample_in[C_AD_DATA_DEPTH-1]}}, sample_in});
-            peak_time_reg <= time_stamp_in[31:0];
+            peak_time_reg <= time_stamp_in;
             rise_count   <= 0;
             fall_count   <= 0;
           end
@@ -96,7 +96,7 @@ module pulse_analyzer #(
           // In pulse update peak, width, area
           width_reg <= width_reg + 1;
           if (sample_in > peak_reg) begin
-            peak_time_reg <= time_stamp_in[31:0];
+            peak_time_reg <= time_stamp_in;
             peak_reg <= sample_in;
           end
           area_reg <= area_reg + $signed({{(C_AREA_WIDTH-C_AD_DATA_DEPTH){sample_in[C_AD_DATA_DEPTH-1]}}, sample_in});
@@ -109,7 +109,7 @@ module pulse_analyzer #(
             fall_count <= 0;
           end
 
-          // If below threshold for debounce length ï¿?? end pulse
+          // If below threshold for debounce length ï¿½?? end pulse
           if (fall_count >= C_DEBOUNCE_LEN) begin
             in_pulse     <= 1'b0;
             pulse_active <= 1'b0;
@@ -122,7 +122,7 @@ module pulse_analyzer #(
             peak_reg     <= {C_AD_DATA_DEPTH{1'b0}};
             width_reg    <= 16'd0;
             area_reg     <= {C_AREA_WIDTH{1'b0}};
-            peak_time_reg <= 32'd0;
+            peak_time_reg <= 64'd0;
             rise_count   <= 0;
             fall_count   <= 0;
           end

@@ -257,7 +257,7 @@
 	wire [15:0] pulse_width [C_AD_CHANNEL_NUM-1:0];
 	wire signed [C_AD_DATA_DEPTH-1:0] pulse_peak [C_AD_CHANNEL_NUM-1:0];
 	wire signed [31:0] pulse_area [C_AD_CHANNEL_NUM-1:0];
-	wire [31:0] peak_time [C_AD_CHANNEL_NUM-1:0];
+	wire [63:0] peak_time [C_AD_CHANNEL_NUM-1:0];
 	// (*MARK_DEBUG="true"*)
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_active;
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_done;
@@ -266,14 +266,14 @@
 	wire signed [C_AD_CHANNEL_NUM*18-1:0] ch_peak_flat;
 	wire signed [C_AD_CHANNEL_NUM*32-1:0] ch_area_flat;
 	wire [C_AD_CHANNEL_NUM*16-1:0] ch_width_flat;
-	wire [C_AD_CHANNEL_NUM*32-1:0] ch_peak_time_flat;
+	wire [C_AD_CHANNEL_NUM*64-1:0] ch_peak_time_flat;
 	genvar gi;
 	generate
 		for (gi = 0; gi < C_AD_CHANNEL_NUM; gi = gi + 1) begin
 			assign ch_peak_flat[gi*18 +: 18] = pulse_peak[gi];
 			assign ch_area_flat[gi*32 +: 32] = pulse_area[gi];
 			assign ch_width_flat[gi*16 +: 16] = pulse_width[gi];
-			assign ch_peak_time_flat[gi*32 +: 32] = peak_time[gi];	
+			assign ch_peak_time_flat[gi*64 +: 64] = peak_time[gi];	
 		end
 	endgenerate
 
@@ -1345,6 +1345,8 @@
 				// Purity abort: non-sort event too close -> abort pending drive
 				if (purity_en && !current_event_is_sort && interval_too_close) begin
 					sort_abort <= 1'b1;
+				end else begin 
+					sort_abort <= 1'b0;
 				end
 
 				sort_ready <= 1'b1;
@@ -1407,11 +1409,12 @@
 	end
 
 
-
+	wire [63:0] event_peak_time;
 	assign speed_pre = slv_reg52[2:0];
 	assign speed_post = slv_reg52[10:8];
 	assign max_time_diff = slv_reg53[31:0]; // Maximum time difference in us between pre and post signals
 	assign dist = slv_reg54[31:0]; // Distance in um for speed measurement
+	assign event_peak_time = peak_time[speed_post];
 
 	// Enable signals for the analyzer and sorting
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
@@ -1542,6 +1545,7 @@
 		.sort_abort(sort_abort),
 		.drive_type(drive_type),
 		.time_us(time_stamp_us),
+		.event_peak_time(event_peak_time),
 		.drive_delay(drive_delay),
 		.drive_width(drive_width),
 		.cooling_time(cooling_time),
