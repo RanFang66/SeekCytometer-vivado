@@ -20,14 +20,14 @@ module ad_data_filter #
     input  wire signed [C_AD_DATA_DEPTH-1:0] ad_ch7_val,
     input  wire signed [C_AD_DATA_DEPTH-1:0] ad_ch8_val,
 
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch1_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch2_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch3_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch4_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch5_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch6_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch7_val_filt,
-    output reg signed [C_AD_DATA_DEPTH-1:0] ad_ch8_val_filt
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch1_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch2_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch3_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch4_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch5_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch6_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch7_val_filt,
+    output wire signed [C_AD_DATA_DEPTH-1:0] ad_ch8_val_filt
 );
 
 localparam integer FILTER_LEN = 4;
@@ -78,50 +78,19 @@ always @(posedge clk or negedge rst_n) begin
                      + ad_ch_val_dly2[ch]
                      + ad_ch_val[ch];
 
-            // if (!initialization_done) begin
-            //     case (init_counter)
-            //         2'd0: sum[ch] <=  (ad_ch_val_dly0[ch]);
-            //         2'd1: sum[ch] <=  (ad_ch_val_dly0[ch])
-            //                         + (ad_ch_val_dly1[ch]);
-            //         2'd2: sum[ch] <=  (ad_ch_val_dly0[ch])
-            //                         + (ad_ch_val_dly1[ch])
-            //                         + (ad_ch_val_dly2[ch]);
-            //         2'd3: sum[ch] <=  (ad_ch_val_dly0[ch])
-            //                         + (ad_ch_val_dly1[ch])
-            //                         + (ad_ch_val_dly2[ch])
-            //                         + (ad_ch_val_dly3[ch]);
-            //     endcase
-            // end else begin
-            //     sum[ch] <= sum[ch]
-            //              + (ad_ch_val[ch])
-            //              - (ad_ch_val_dly3[ch]);
-            // end
-
             ad_ch_val_filt_arr[ch] <= (sum[ch]) >>> 2;
         end
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        ad_ch1_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch2_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch3_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch4_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch5_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch6_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch7_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-        ad_ch8_val_filt <= {C_AD_DATA_DEPTH{1'b0}};
-    end else begin
-        ad_ch1_val_filt <= ad_ch_val_filt_arr[0];
-        ad_ch2_val_filt <= ad_ch_val_filt_arr[1];
-        ad_ch3_val_filt <= ad_ch_val_filt_arr[2];
-        ad_ch4_val_filt <= ad_ch_val_filt_arr[3];
-        ad_ch5_val_filt <= ad_ch_val_filt_arr[4];
-        ad_ch6_val_filt <= ad_ch_val_filt_arr[5];
-        ad_ch7_val_filt <= ad_ch_val_filt_arr[6];
-        ad_ch8_val_filt <= ad_ch_val_filt_arr[7];
-    end
-end
+// Direct output from filter array (no extra register stage)
+assign ad_ch1_val_filt = ad_ch_val_filt_arr[0];
+assign ad_ch2_val_filt = ad_ch_val_filt_arr[1];
+assign ad_ch3_val_filt = ad_ch_val_filt_arr[2];
+assign ad_ch4_val_filt = ad_ch_val_filt_arr[3];
+assign ad_ch5_val_filt = ad_ch_val_filt_arr[4];
+assign ad_ch6_val_filt = ad_ch_val_filt_arr[5];
+assign ad_ch7_val_filt = ad_ch_val_filt_arr[6];
+assign ad_ch8_val_filt = ad_ch_val_filt_arr[7];
 
 endmodule

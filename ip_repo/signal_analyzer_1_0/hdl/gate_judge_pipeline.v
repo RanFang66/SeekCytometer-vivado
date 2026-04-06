@@ -3,16 +3,16 @@
 // Module Name: gate_judge_pipeline
 // Description: Resource-efficient gate judgement module with pipelined design.
 //              Supports four gate types:
-//                1 — Interval gate   (1-D range on X)
-//                2 — Rectangle gate  (axis-aligned bounding box)
-//                3 — Polygon gate    (iterative ray-casting, 2-stage pipeline)
-//                4 — Ellipse gate    (axis-aligned ellipse via bounding rect)
+//                1 - Interval gate   (1-D range on X)
+//                2 - Rectangle gate  (axis-aligned bounding box)
+//                3 - Polygon gate    (iterative ray-casting, 2-stage pipeline)
+//                4 - Ellipse gate    (axis-aligned ellipse via bounding rect)
 //
 //              The polygon path iterates edges one at a time using a 2-stage
 //              pipeline (stage 1: diff/compare, stage 2: multiply/accumulate),
 //              reusing a single pair of multipliers across all edges.
 //              This saves significant DSP resources compared to the parallel
-//              version (2 multipliers vs 2×N).
+//              version (2 multipliers vs 2*N).
 //
 //  Latency from trigger rising edge to valid output:
 //    Interval / Rectangle :  1 cycle
@@ -65,7 +65,7 @@ module gate_judge_pipeline #(
         else        trigger_dly <= trigger;
 
     // =========================================================================
-    //  Input latch — capture all inputs on trigger rising edge
+    //  Input latch - capture all inputs on trigger rising edge
     // =========================================================================
     reg signed [DW-1:0] px, py;
     reg [2:0]           gtype;
@@ -104,7 +104,7 @@ module gate_judge_pipeline #(
     end
 
     // =========================================================================
-    //  Interval / Rectangle — combinational from latched values
+    //  Interval / Rectangle - combinational from latched values
     // =========================================================================
     wire signed [DW-1:0] bound_xmin = (gx[0] < gx[1]) ? gx[0] : gx[1];
     wire signed [DW-1:0] bound_xmax = (gx[0] < gx[1]) ? gx[1] : gx[0];
@@ -115,7 +115,7 @@ module gate_judge_pipeline #(
     wire rect_result = intv_result && (py > bound_ymin) && (py < bound_ymax);
 
     // =========================================================================
-    //  Polygon — iterative 2-stage pipeline (ray-casting)
+    //  Polygon - iterative 2-stage pipeline (ray-casting)
     //
     //  Stage 1 (S1): read edge vertices via mux, compute differences & skip flag.
     //                Results registered into s1_* for the next cycle.
@@ -162,11 +162,11 @@ module gate_judge_pipeline #(
     wire signed [DW-1:0] vy2 = gy[next_idx];
 
     // =========================================================================
-    //  Ellipse — free-running 4-stage pipeline
+    //  Ellipse - free-running 4-stage pipeline
     //
     //  Ellipse defined by bounding rectangle: (gx[0],gy[0]) to (gx[1],gy[1]).
-    //  Test:  dx²·sb² + dy²·sa² ≤ sa²·sb²
-    //  where  dx = 2·px-(x0+x1),  dy = 2·py-(y0+y1),
+    //  Test:  dx^2*sb^2 + dy^2*sa^2 <= sa^2*sb^2
+    //  where  dx = 2*px-(x0+x1),  dy = 2*py-(y0+y1),
     //         sa = x1-x0,          sb = y1-y0   (all doubled semi-axes).
     //  Pure integer arithmetic, no division.
     //
@@ -260,9 +260,9 @@ module gate_judge_pipeline #(
             case (state)
                 // ---------------------------------------------------------
                 S_IDLE: begin
+                    valid_reg <= 1'b0;  // auto-clear: ensure valid is a single-cycle pulse
                     if (trigger_rise) begin
                         state        <= S_CALC;
-                        valid_reg    <= 1'b0;
                         // Polygon init
                         edge_idx     <= {CNT_WIDTH{1'b0}};
                         crossing_acc <= 1'b0;
@@ -298,34 +298,41 @@ module gate_judge_pipeline #(
 
                         // --- Polygon: iterative 2-stage pipeline ---
                         GT_POLYGON: begin
-                            // Stage 2: multiply & accumulate (previous edge)
-                            if (s1_valid)
-                                crossing_acc <= crossing_acc ^ poly_crosses;
-
-                            // Stage 1: compute diffs for current edge
-                            if (poly_feeding) begin
-                                s1_a <= py  - vy1;          // py - y1
-                                s1_b <= vx2 - vx1;          // x2 - x1
-                                s1_c <= px  - vx1;          // px - x1
-                                s1_d <= vy2 - vy1;          // y2 - y1
-                                s1_skip <= (vy1 == vy2)
-                                        || ((vy1 > py) == (vy2 > py));
-                                s1_y2_gt_y1 <= (vy2 > vy1);
-                                s1_valid <= 1'b1;
-
-                                if (edge_idx == gnum - 1'b1)
-                                    poly_feeding <= 1'b0;
-                                else
-                                    edge_idx <= edge_idx + 1'b1;
-                            end else begin
-                                s1_valid <= 1'b0;
-                            end
-
-                            // Done: stage 1 drained and stage 2 flushed
-                            if (!poly_feeding && !s1_valid) begin
-                                result_reg <= crossing_acc;
+                            if (gnum < 3) begin
+                                // Polygon requires at least 3 vertices
+                                result_reg <= 1'b0;
                                 valid_reg  <= 1'b1;
                                 state      <= S_IDLE;
+                            end else begin
+                                // Stage 2: multiply & accumulate (previous edge)
+                                if (s1_valid)
+                                    crossing_acc <= crossing_acc ^ poly_crosses;
+
+                                // Stage 1: compute diffs for current edge
+                                if (poly_feeding) begin
+                                    s1_a <= py  - vy1;          // py - y1
+                                    s1_b <= vx2 - vx1;          // x2 - x1
+                                    s1_c <= px  - vx1;          // px - x1
+                                    s1_d <= vy2 - vy1;          // y2 - y1
+                                    s1_skip <= (vy1 == vy2)
+                                            || ((vy1 > py) == (vy2 > py));
+                                    s1_y2_gt_y1 <= (vy2 > vy1);
+                                    s1_valid <= 1'b1;
+
+                                    if (edge_idx == gnum - 1'b1)
+                                        poly_feeding <= 1'b0;
+                                    else
+                                        edge_idx <= edge_idx + 1'b1;
+                                end else begin
+                                    s1_valid <= 1'b0;
+                                end
+
+                                // Done: stage 1 drained and stage 2 flushed
+                                if (!poly_feeding && !s1_valid) begin
+                                    result_reg <= crossing_acc;
+                                    valid_reg  <= 1'b1;
+                                    state      <= S_IDLE;
+                                end
                             end
                         end
 

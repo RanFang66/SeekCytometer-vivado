@@ -108,15 +108,12 @@ module event_aggregator #(
     // BRAM write pointer (next free address)
     reg [31:0] write_addr;
 
-    // Speed measurement module
-//    (*MARK_DEBUG="true"*)
+    // Speed measurement: peak_time difference between pre and post channels
     wire [63:0] speed_pre_time = ch_peak_time_flat[speed_pre_channel*64 +: 64];
-//    (*MARK_DEBUG="true"*)
     wire [63:0] speed_post_time = ch_peak_time_flat[speed_post_channel*64 +: 64];
     reg [31:0] latched_time_diff;
     reg [31:0] latched_post_event_time;
-//    (*MARK_DEBUG="true"*)
-    wire[63:0] time_diff = speed_post_time - speed_pre_time;
+    wire [63:0] time_diff = speed_post_time - speed_pre_time;
 
     integer idx;
     reg wrap_around; // indicates if write pointer wrapped around
@@ -137,16 +134,8 @@ module event_aggregator #(
         end
     end
 
-    assign measured_time_diff = latched_time_diff;      // output measured time difference
+    assign measured_time_diff = latched_time_diff;
     assign ch_pulse_valid_latched = ch_pulse_valid;
-    // always @(posedge clk or negedge rst_n) begin
-    //     if (!rst_n) begin
-    //         ch_pulse_valid <= {NUM_CH{1'b0}};
-    //     end else begin
-    //         if 
-    //     end
-    // end
-
 
     // ------------- sequential FSM and actions -------------
     always @(posedge clk or negedge rst_n) begin

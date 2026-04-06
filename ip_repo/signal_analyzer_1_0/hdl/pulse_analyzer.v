@@ -1,23 +1,3 @@
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 07/29/2025 06:05:11 PM
-// Design Name: 
-// Module Name: pulse_analyzer
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 `timescale 1ns/1ps
 module pulse_analyzer #(
   parameter integer C_AD_DATA_DEPTH = 18,
@@ -31,6 +11,7 @@ module pulse_analyzer #(
   input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,
   input  wire                          enabled,
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
+  input  wire                          event_done,     // event boundary: clear outputs if no pulse in this event
   output reg                           pulse_active,   // high while in pulse
   output reg                           pulse_done,     // one clock pulse at pulse end
   output reg signed [C_AD_DATA_DEPTH-1:0] peak_out,
@@ -52,6 +33,9 @@ module pulse_analyzer #(
   reg [$clog2(C_DEBOUNCE_LEN+1)-1:0] rise_count;
   reg [$clog2(C_DEBOUNCE_LEN+1)-1:0] fall_count;
 
+  // Track whether a pulse completed during the current event
+  reg pulse_occurred;
+
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       in_pulse     <= 1'b0;
@@ -67,8 +51,20 @@ module pulse_analyzer #(
       peak_time_out <= 64'd0;
       rise_count   <= 0;
       fall_count   <= 0;
+      pulse_occurred <= 1'b0;
     end else begin
       pulse_done <= 1'b0; // default
+
+      // On event boundary, clear outputs if no pulse completed during this event
+      if (event_done) begin
+        if (!pulse_occurred) begin
+          peak_out      <= {C_AD_DATA_DEPTH{1'b0}};
+          width_out     <= 16'd0;
+          area_out      <= {C_AREA_WIDTH{1'b0}};
+          peak_time_out <= 64'd0;
+        end
+        pulse_occurred <= 1'b0; // reset for next event
+      end
 
       if (sample_valid && enabled) begin
         if (!in_pulse) begin
@@ -109,11 +105,12 @@ module pulse_analyzer #(
             fall_count <= 0;
           end
 
-          // If below threshold for debounce length �?? end pulse
+          // Below threshold for debounce length -> end pulse
           if (fall_count >= C_DEBOUNCE_LEN) begin
             in_pulse     <= 1'b0;
             pulse_active <= 1'b0;
             pulse_done   <= 1'b1;
+            pulse_occurred <= 1'b1;
             peak_out     <= peak_reg;
             width_out    <= width_reg;
             area_out     <= area_reg;

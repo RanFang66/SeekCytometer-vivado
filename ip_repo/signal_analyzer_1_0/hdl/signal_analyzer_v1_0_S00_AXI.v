@@ -26,11 +26,9 @@
         input wire [C_AD_DATA_DEPTH-1:0] ad_ch7_val,
         input wire [C_AD_DATA_DEPTH-1:0] ad_ch8_val,
         
-//		(*MARK_DEBUG="true"*)
         output wire event_active,
 		output wire [C_AD_CHANNEL_NUM-1:0] channel_active,
-//		(*MARK_DEBUG="true"*)
-		output wire event_done, // high for one clock cycle when event is done
+		output wire event_done,
 		output wire [2:0] drive_state_out,
 		output wire drive_level_out,
 
@@ -149,7 +147,6 @@
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg13;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg14;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg15;
-//	(*MARK_DEBUG="true"*)
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg16;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg17;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg18;
@@ -216,14 +213,8 @@
 	assign S_AXI_RRESP	= axi_rresp;
 	assign S_AXI_RVALID	= axi_rvalid;
 
- // User definnitions 
-//    (*MARK_DEBUG="true"*)
+ // User definitions
     wire [C_AD_CHANNEL_NUM-1:0] enabled_channels = slv_reg1[C_AD_CHANNEL_NUM-1:0];
-	// Trigger mask, 1 bit per channel
-	// wire [C_AD_CHANNEL_NUM-1:0] trigger_mask = slv_reg2[C_AD_CHANNEL_NUM-1:0];
-	
-	// // Trigger type, 1 for AND, 0 for OR
-	// wire trigger_type = slv_reg2[C_AD_CHANNEL_NUM];
 
 	// Threshold values for each channel
 	wire [C_AD_DATA_DEPTH-1:0] threshold_value[C_AD_CHANNEL_NUM-1:0];
@@ -242,23 +233,12 @@
 	// Assign ADC data to an array for easier access
 	wire signed [C_AD_DATA_DEPTH-1:0]  ad_data_array [C_AD_CHANNEL_NUM-1:0];
 
-	
-	// assign ad_data_array[0] = ad_ch1_val;
-	// assign ad_data_array[1] = ad_ch2_val;
-	// assign ad_data_array[2] = ad_ch3_val;
-	// assign ad_data_array[3] = ad_ch4_val;
-	// assign ad_data_array[4] = ad_ch5_val;
-	// assign ad_data_array[5] = ad_ch6_val;
-	// assign ad_data_array[6] = ad_ch7_val;
-	// assign ad_data_array[7] = ad_ch8_val;
 
-	// Pulse detection results: pulse_active indicates if a pulse is detected on each channel
-	// pulse_width gives the width of the pulse, pulse_peak gives the peak value, and pulse_area gives the area under the pulse
+	// Pulse detection results per channel
 	wire [15:0] pulse_width [C_AD_CHANNEL_NUM-1:0];
 	wire signed [C_AD_DATA_DEPTH-1:0] pulse_peak [C_AD_CHANNEL_NUM-1:0];
 	wire signed [31:0] pulse_area [C_AD_CHANNEL_NUM-1:0];
 	wire [63:0] peak_time [C_AD_CHANNEL_NUM-1:0];
-	// (*MARK_DEBUG="true"*)
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_active;
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_done;
 
@@ -278,28 +258,18 @@
 	endgenerate
 
 
-	// (*MARK_DEBUG="true"*)
-	reg  analyze_en; 	// Enable signal for the analyzer
-	// (*MARK_DEBUG="true"*)
-	reg  sort_en; 		// Enable signal for sorting
+	reg  analyze_en;
+	reg  sort_en;
 
 	reg  ad_data_valid_d0;
 	reg  ad_data_valid_d1;
 
-	// (*MARK_DEBUG="true"*)
 	wire  [31:0] event_counter;
-	// reg  [31:0] sort_counter;
-	
 
-	// (*MARK_DEBUG="true"*)
-	wire ad_data_updated = !ad_data_valid_d1 && ad_data_valid_d0; // Rising edge of ADC data valid signal
+	wire ad_data_updated = !ad_data_valid_d1 && ad_data_valid_d0; // Rising edge of ADC data valid
 
-	
-
-	// For speed measurement
-//	(*MARK_DEBUG="true"*)
+	// Speed measurement channel selection
 	wire [2:0] speed_pre;
-//	(*MARK_DEBUG="true"*)
 	wire [2:0] speed_post;
 	wire signed [31:0] dist;
 	wire [31:0]	max_time_diff;
@@ -1186,23 +1156,15 @@
 
 	reg [7:0] timer_count;
 	reg [63:0] time_stamp_us;
-//	(*MARK_DEBUG="true"*)
 	reg [2:0] sort_ch_x;
-//	(*MARK_DEBUG="true"*)
 	reg [2:0] sort_ch_y;
-//	(*MARK_DEBUG="true"*)
 	reg [1:0] sort_x_type;
-//	(*MARK_DEBUG="true"*)
 	reg [1:0] sort_y_type;
-//	(*MARK_DEBUG="true"*)
 	reg drive_type;
-//	(*MARK_DEBUG="true"*)
 	reg [31:0] drive_delay;
 	reg [31:0] drive_width;
 	reg [31:0] cooling_time;
-//	(*MARK_DEBUG="true"*)
 	wire [2:0] drive_state;
-//	(*MARK_DEBUG="true"*)
 	wire drive_level;
 
 	reg [31:0] delay_calcu_coe;
@@ -1327,6 +1289,7 @@
 			sort_abort <= 1'b0;
 		end else begin
 			sort_abort <= 1'b0; // default: single-cycle pulse
+			sort_trig_reg <= 1'b0; // default: single-cycle pulse
 
 			if (event_done) begin
 				ch_sort_valid_latched <= ch_pulse_valid[sort_ch_x] && ch_pulse_valid[sort_ch_y];
@@ -1432,27 +1395,7 @@
 	end
 
 
-	// Pulse detection logic
-// 	module pulse_analyzer #(
-//   parameter integer C_AD_DATA_DEPTH = 18,
-//   parameter integer C_PEAK_WIDTH    = 18,
-//   parameter integer C_AREA_WIDTH    = 32,
-//   parameter integer C_DEBOUNCE_LEN  = 3   // ȥ����������??????
-// )(
-//   input  wire                          clk,
-//   input  wire                          rst_n,
-//   input  wire                          sample_valid,   // new sample available
-//   input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,
-//   input  wire                          enabled,
-//   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
-//   output reg                           pulse_active,   // high while in pulse
-//   output reg                           event_done,     // one clock pulse at pulse end
-//   output reg signed [C_PEAK_WIDTH-1:0] peak_out,
-//   output reg [31:0]                    width_out,      // in samples
-//   output reg signed [C_AREA_WIDTH-1:0] area_out
-// );
-
-
+	// Pulse analyzers (one per channel)
 	genvar i;
 	generate
 	  for (i = 0; i < C_AD_CHANNEL_NUM; i = i + 1) begin : PULSE_ANALYZERS
@@ -1466,6 +1409,7 @@
 			.sample_in(ad_data_array[i]),
 			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
+			.event_done(event_done),
 			.pulse_active(pulse_active[i]),
 			.pulse_done(pulse_done[i]),
 			.width_out(pulse_width[i]),
@@ -1515,25 +1459,7 @@
 	);
 
 
-	// Instance of sorting module
-//  module drive_signal_generation #(
-//     parameter integer SAMPLE_DATA_WIDTH = 16,
-//     parameter integer CHANNEL_NUM = 8
-// )(
-//     input wire clk,
-//     input wire rst_n,
-//     input wire sort_en,
-//     input wire sort_trig,
-//     input wire drive_type,  // 0: Level, 1: Edge
-//     input wire [31:0] time_us,
-//     input wire [31:0] drive_delay,
-//     input wire [31:0] drive_width,
-//     input wire [31:0] cooling_time,
-//     output reg [2:0]  drive_state,
-//     output wire        drive_level
-// );
-
-
+	// Drive signal generation for sorting
 	drive_signal_generation #(
 		.SAMPLE_DATA_WIDTH(C_AD_DATA_DEPTH),
 		.CHANNEL_NUM(C_AD_CHANNEL_NUM)

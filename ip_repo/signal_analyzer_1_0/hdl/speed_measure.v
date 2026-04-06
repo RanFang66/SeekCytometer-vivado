@@ -57,7 +57,7 @@ module speed_measure (
         if (!rst_n) begin
             timeout_threshold <= 64'b0;
         end else if (current_state == IDLE && speed_pre_trig) begin
-            // �?32位的max_time_diff扩展�?64位后再相�?
+            // Zero-extend 32-bit max_time_diff to 64 bits before addition
             timeout_threshold <= time_stamp_us + {32'b0, max_time_diff};
         end
     end

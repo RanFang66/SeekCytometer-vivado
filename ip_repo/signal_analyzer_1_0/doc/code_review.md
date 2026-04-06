@@ -1,328 +1,297 @@
 # Signal Analyzer IP Core - Code Review Report
 
-**Date**: 2026-04-01  
-**Scope**: `ip_repo/signal_analyzer_1_0/hdl/` 全部源文件  
-**Reviewer**: Claude Code  
+**Review Date**: 2026-04-06
+**Scope**: `hdl/` 目录全部源文件（8个模块）
+**基准 Commit**: 5696229 (main)
 
 ---
 
 ## 1. 架构概览
 
-IP核整体架构如下:
-
 ```
-signal_analyzer_v1_0 (顶层封装)
-  └── signal_analyzer_v1_0_S00_AXI (AXI-Lite从接口 + 用户逻辑)
-        ├── ad_data_filter         (8通道4点滑动平均滤波)
-        ├── pulse_analyzer x8      (每通道脉冲检测: 阈值+去抖+峰/宽/面积计算)
-        ├── event_aggregator       (事件聚合, BRAM写入, 速度测量)
-        └── drive_signal_generation(分选驱动信号生成)
-```
+signal_analyzer_v1_0 (Top-level AXI wrapper)
+  └── signal_analyzer_v1_0_S00_AXI (AXI-Lite slave + user logic)
+        ├── ad_data_filter          8通道4点平均滤波
+        ├── pulse_analyzer x8       每通道脉冲检测 (阈值+去抖+peak/width/area)
+        ├── gate_judge_pipeline     分选门控判定 (区间/矩形/多边形/椭圆)
+        ├── event_aggregator        事件聚合 + BRAM写入 + 速度测量
+        └── drive_signal_generation 分选驱动信号生成 (延时+脉宽+冷却)
 
-未实例化的模块:
-- `gate_judge_pipeline.v` -- 已编写完成, 支持区间/矩形/多边形/椭圆门控, 但未接入主模块
-- `speed_measure.v` -- 独立速度测量状态机, 未接入 (event_aggregator内部有简化实现)
+未实例化:
+  - speed_measure.v             独立速度测量状态机 (event_aggregator内有简化实现)
+```
 
 ---
 
-## 2. 严重问题 (Bugs)
+## 2. 严重问题 (Must Fix)
 
-### 2.1 speed_post通道未在pulse_analyzer中使能
+### 2.1 gate_judge_pipeline `valid` 输出为持续电平而非脉冲
 
-**文件**: `signal_analyzer_v1_0_S00_AXI.v:1388`
+**文件**: `gate_judge_pipeline.v:281-289`
+
+`valid_reg` 在结果计算完成后被置1，但仅在下一次 `trigger_rise` 时才清0（第265行）。导致 `gate_valid_out` 在两次事件之间**持续保持高电平**。
+
+**影响链**: 在 `signal_analyzer_v1_0_S00_AXI.v:1337` 中，`if (gate_valid_out)` 块在 `gate_valid_out` 持续为高期间**每个时钟周期都会执行**，导致：
+
+1. **`sort_abort` 变成持续电平**：当非分选事件间隔过近时，`sort_abort` 应为单周期脉冲触发abort，但实际会持续为高。虽然 `drive_signal_generation` 在 `S_DRIVE_WAIT` 状态下检测到 `sort_abort` 后回到 `IDLE`，此时持续的 `sort_abort` 不再有影响，但信号语义不清晰。
+
+2. **`last_event_time`/`last_event_was_sort` 被重复覆写**：这两个历史记录信号在 `gate_valid_out` 块内更新，持续高电平导致每周期重复赋值，虽然值不变但增加功耗且违背设计意图。
+
+3. **`sort_trig_reg` 依赖正确的间隙**：当前逻辑恰好能工作，因为新事件的 `trigger_rise` 会暂时清除 `valid_reg`，产生 `sort_trig` 的下降沿。但这种正确性依赖于实现细节，非常脆弱。
+
+**建议修复**: 在 `S_IDLE` 状态中自动清零 `valid_reg`：
 
 ```verilog
-.enabled((enabled_channels[i] | (speed_pre == i)) & analyze_en),
+S_IDLE: begin
+    valid_reg <= 1'b0;  // 确保valid为单周期脉冲
+    if (trigger_rise) begin
+        state <= S_CALC;
+        // ...existing code
+    end
+end
 ```
 
-speed_pre通道在未被enabled_channels包含时仍会被额外使能, 但speed_post通道没有同样的处理。如果speed_post对应的通道不在enabled_channels中, 该通道的pulse_analyzer不会运行, 导致速度测量失败。
+### 2.2 ad_data_filter 输出延迟与采样时序不匹配
 
-**修复建议**: 将enabled条件改为:
+**文件**: `ad_data_filter.v:76-100`, `signal_analyzer_v1_0_S00_AXI.v:1466`
+
+滤波器内部存在 **2个采样周期** 的流水线延迟：
+
+| 周期 | sum (NBA) | ad_ch_val_filt_arr (NBA) | ad_chX_val_filt |
+|------|-----------|--------------------------|-----------------|
+| N (`ad_data_updated`=1) | 计算新值 (end-of-cycle生效) | ← 读取旧 sum (N-1) | ← 读取旧 filt_arr (N-1) |
+| N+1 | 新值生效 | 新值生效 | ← 读取 filt_arr(N) = 旧sum(N-1) |
+
+`pulse_analyzer` 的 `sample_valid` 直接连接 `ad_data_updated`，与 `sample_in`（来自滤波器输出 `ad_chX_val_filt`）在同一个 `ad_data_updated` 脉冲时采样。但此时滤波器输出的是 **2个采样前** 的结果。
+
+**影响**: `peak_time_out` 记录的时间戳对应的是当前时刻，但对应的采样数据实际来自2个采样前，导致 peak_time 偏早约 2×T_sample。对 drive_delay 的绝对定时精度有影响。
+
+**建议修复** (选其一):
+- 方案A: 将 `ad_data_updated` 延迟2拍后再作为 `pulse_analyzer` 的 `sample_valid`
+- 方案B: 去除 `ad_data_filter` 中多余的输出寄存器级（`ad_ch_val_filt_arr` 直接输出），减少为1级延迟
+
+### 2.3 Polygon 门控 `gnum` 为0或1时下溢
+
+**文件**: `gate_judge_pipeline.v:156,316`
+
 ```verilog
-.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
+wire [CNT_WIDTH-1:0] next_idx = (edge_idx == gnum - 1'b1) ? ...
+if (edge_idx == gnum - 1'b1) poly_feeding <= 1'b0;
 ```
 
-### 2.2 32位时间戳回绕导致驱动信号异常
+当 `gnum = 0`（软件未配置或配置错误时），`gnum - 1'b1` 在无符号4位运算中下溢为 `4'hF`（15），导致：
+- 多边形迭代15+2=17个周期，读取未初始化的顶点数据
+- 结果完全不可预测
 
-**文件**: `drive_signal_generation.v:78`
-
-`time_us`为32位, 在1us分辨率下约71分钟后回绕。时间比较采用无符号比较:
+**建议修复**:
 
 ```verilog
-time_drive_start <= (time_us + delay_total[31:0]);  // 可能回绕
+GT_POLYGON: begin
+    if (gnum < 3) begin  // 多边形至少3个顶点
+        result_reg <= 1'b0;
+        valid_reg <= 1'b1;
+        state <= S_IDLE;
+    end else begin
+        // ...existing polygon iteration logic
+    end
+end
+```
+
+---
+
+## 3. 中等问题 (Should Fix)
+
+### 3.1 speed_measure.v 未实例化（死代码）
+
+**文件**: `speed_measure.v`（136行）
+
+完整的速度测量模块从未被实例化。速度测量功能由 `event_aggregator.v` 内联实现（第119行 `time_diff = speed_post_time - speed_pre_time`）。
+
+**建议**: 确认不需要后删除，避免维护困惑。如需保留，至少添加注释说明。
+
+### 3.2 事件写入期间新事件静默丢失
+
+**文件**: `event_aggregator.v:200-241`
+
+当 FSM 处于 BRAM 写入状态（S_WAIT_GATE ~ S_DONE）时，新的 `event_done` 被忽略，没有任何标志或计数器记录丢失事件数。
+
+**影响**: 在高事件速率下（例如 >5000 events/s），每次 BRAM 写入约需30+时钟周期（8通道全开），如果写入时间接近事件间隔，会有事件丢失但软件端无法感知。
+
+**建议**: 添加丢失事件计数器，通过AXI寄存器可回读：
+
+```verilog
+reg [31:0] dropped_event_count;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n || !analyze_en)
+        dropped_event_count <= 32'd0;
+    else if (event_done && state != S_IDLE)
+        dropped_event_count <= dropped_event_count + 1;
+end
+```
+
+### 3.3 latched_post_event_time 64位截断为32位
+
+**文件**: `event_aggregator.v:117,218`
+
+```verilog
+reg [31:0] latched_post_event_time;
 ...
-if (time_us >= time_drive_start)  // 回绕后立即为true
+latched_post_event_time <= speed_post_time;  // speed_post_time is 64-bit!
 ```
 
-当`time_us`接近`0xFFFFFFFF`时, `time_drive_start`回绕到一个很小的值, 导致驱动信号立即触发。对于长时间运行的流式细胞仪, 这是一个**必须修复的问题**。
+`speed_post_time` 是64位的 peak_time 切片，赋值给32位寄存器时高位被静默截断。`time_stamp_us` 运行约71分钟（2^32 us ≈ 4295秒）后高位将携带有效信息。
 
-**修复建议**: 
-- 方案A: 使用差值比较 `(time_us - time_drive_start_saved) >= delay` 代替绝对时间比较
-- 方案B: 使用64位时间戳 (目前`time_stamp_us`本身就是64位, 只是传给drive模块时被截断了)
+**建议**: 扩展为64位存储并写入BRAM，或在文档中注明运行时间限制。
 
-### 2.3 脉冲分析器去抖期间的面积/宽度计算误差
+### 3.4 脉冲分析器去抖期间面积/宽度计算误差
 
-**文件**: `pulse_analyzer.v:82-93`
+**文件**: `pulse_analyzer.v:83-108,113-128`
 
-上升沿去抖需要`C_DEBOUNCE_LEN`(默认3)个连续样本超过阈值才进入脉冲状态。进入时:
-```verilog
-width_reg <= 16'd1;
-area_reg  <= sample_in (符号扩展);
-```
+上升沿去抖：需要 `C_DEBOUNCE_LEN`（默认3）个连续样本超过阈值才进入脉冲，进入后 `width_reg` 从1开始、`area_reg` 仅包含当前样本。去抖期间的3个超阈值样本**未计入**面积和宽度。
 
-但去抖期间的3个样本**未被计入**面积和宽度。类似地, 下降沿去抖期间的样本**被额外计入**了面积和宽度(因为仍在in_pulse状态中累积)。
+下降沿去抖：需要3个连续样本低于阈值才结束，但此期间仍在累加 `width_reg` 和 `area_reg`（因为 `in_pulse` 仍为1），导致**多计入**了低于阈值的样本。
 
-对于窄脉冲, 这会导致:
-- 宽度偏小 `C_DEBOUNCE_LEN` 个样本
-- 面积偏小 (上升沿去抖样本未计入)
-- 面积偏大 (下降沿去抖样本多算了)
+**对窄脉冲的影响**：
+- width 偏差：-3（上升缺失）+3（下降多算）≈ 0（正好抵消）
+- area 偏差：上升沿漏掉的面积 ≠ 下降沿多算的面积（因为波形不对称），存在系统性偏差
 
-**影响评估**: 如果脉冲宽度远大于去抖长度, 影响可忽略; 如果脉冲较窄(<20个样本), 误差显著。
-
-### 2.4 BRAM端口声明风格问题
-
-**文件**: `signal_analyzer_v1_0_S00_AXI.v:37-40`
-
-```verilog
-wire [31:0] bram_din_a,    // 缺少 output 关键字
-wire [31:0] bram_addr_a,   
-wire bram_we_a,            
-wire bram_en_a,            
-```
-
-这些端口声明省略了`output`方向关键字, 依赖Verilog-2001 ANSI风格的方向继承 (继承自上方的`output wire drive_level_out`)。虽然Vivado能正确处理, 但:
-- 不同综合工具可能行为不一致
-- 代码可读性差, 容易误解为内部wire
-
-**修复建议**: 显式声明为 `output wire [31:0] bram_din_a`。
+**评估**: 对于宽脉冲（>50 samples）影响可忽略；窄脉冲（<20 samples）需评估精度要求。
 
 ---
 
-## 3. 潜在问题 (Warnings)
+## 4. 设计改进建议
 
-### 3.1 复位风格不一致
+### 4.1 AXI 寄存器增加运行状态回读
 
-- `pulse_analyzer.v` 使用**同步复位**: `always @(posedge clk)`
-- `event_aggregator.v`, `drive_signal_generation.v` 使用**异步复位**: `always @(posedge clk or negedge rst_n)`
-- `signal_analyzer_v1_0_S00_AXI.v` AXI部分使用同步复位, 用户逻辑使用异步复位
+**文件**: `signal_analyzer_v1_0_S00_AXI.v:1096-1159`
 
-混合使用可能导致:
-- 复位释放时序不确定, 各模块退出复位时机不同
-- 在某些时序条件下, 异步复位模块已开始工作而同步复位模块尚未退出复位
+当前仅 `slv_reg56`（write addr）和 `slv_reg57`（event counter）为硬件状态。建议利用空闲寄存器：
 
-**建议**: 统一使用异步复位+同步释放(async assert, sync deassert)模式, 或全部使用同步复位。
+| 寄存器 | 建议用途 |
+|--------|----------|
+| slv_reg58 | `{drive_state, sort_trig, sort_abort, ...}` 调试状态 |
+| slv_reg59 | 丢失事件计数器（见3.2） |
+| slv_reg60 | `time_stamp_us[31:0]`（供软件校时） |
+| slv_reg61 | `ch_pulse_valid` 当前值 |
 
-### 3.2 event_aggregator中的速度测量精度
+### 4.2 硬编码常量参数化
 
-**文件**: `event_aggregator.v:111-117`
+| 位置 | 值 | 说明 |
+|------|------|------|
+| `S00_AXI.v:1184` | `199` | CLK_COUNT_IN_1US，200MHz专用 |
+| `event_aggregator.v:50` | `0x00008000` | BRAM大小32KB |
+| `drive_signal_generation.v:107` | `64'd10` | Edge模式高电平10us |
 
-```verilog
-wire [31:0] speed_pre_time  = ch_peak_time_flat[speed_pre_channel*32 +: 32];
-wire [31:0] speed_post_time = ch_peak_time_flat[speed_post_channel*32 +: 32];
-wire [31:0] time_diff = speed_post_time - speed_pre_time;
-```
+**建议**: 提取为 `parameter`，方便不同平台/时钟频率复用。
 
-peak_time使用的是time_stamp_us (微秒级), 而不是时钟周期级的精确时间。对于高速流体 (如10m/s), 两个探测点间距100um时, 时间差仅10us, 微秒级分辨率只有10个刻度, 误差达10%。
-
-**建议**: 考虑使用时钟周期计数 (5ns@200MHz) 来记录peak_time, 或者在pulse_analyzer中同时记录微秒和时钟周期两种时间戳。
-
-### 3.3 sort_trig组合逻辑时序路径较长
-
-**文件**: `signal_analyzer_v1_0_S00_AXI.v:1264-1279`
-
-```verilog
-assign sort_compare_value_x = (sort_x_type == 2'b00) ? ... : ... ;
-assign sort_trig_x = (ch_pulse_valid[sort_ch_x] && ...) || (sort_x_type == 2'b11);
-assign sort_trig = sort_trig_x && sort_trig_y && !event_active;
-```
-
-sort_trig是一条纯组合逻辑链: 寄存器选择 -> MUX选择参数类型 -> 有符号比较 -> AND组合。这条路径包含:
-- 4:1 MUX (sort_x_type)
-- 32位有符号比较 (>= sort_x_low, <= sort_x_high)  
-- AND门链
-
-在200MHz时钟下可能存在时序违例风险。
-
-**建议**: 将sort_trig打一拍寄存, 或将比较逻辑流水线化。
-
-### 3.4 drive_signal_generation中sort_en作为异步复位
-
-**文件**: `drive_signal_generation.v:63-65`
-
-```verilog
-always @ (posedge clk or negedge rst_n)
-begin
-    if (rst_n == 1'b0 || !sort_en)
-```
-
-`!sort_en`在异步复位always块中作为同步条件使用。虽然功能正确 (只在时钟上升沿检查sort_en), 但编码风格容易引起误解, 且综合工具可能将sort_en推断为时钟使能而非复位。
-
-**建议**: 将sort_en检查移入else分支, 作为显式的状态复位条件。
-
-### 3.5 ad_data_filter输出延迟
-
-**文件**: `ad_data_filter.v:60-103`
-
-滤波器有两级流水线延迟:
-1. 第一拍: 计算sum (使用上一拍的delay值)
-2. 第二拍: `ad_ch_val_filt_arr <= sum >>> 2`
-3. 第三拍: 输出寄存器赋值 (lines 105-125, 独立always块)
-
-总共3个时钟周期延迟。这意味着pulse_analyzer收到的是3个采样周期前的数据, 但peak_time_out使用的是当前的time_stamp_us。对于高速事件, 这可能导致peak时间标记偏移。
-
----
-
-## 4. 设计优化建议
-
-### 4.1 gate_judge_pipeline未接入
-
-`gate_judge_pipeline.v`已经实现了区间/矩形/多边形/椭圆四种门控类型, 但未在主模块中实例化。当前分选判断只使用了简单的矩形范围比较 (sort_x_low/high, sort_y_low/high)。
-
-**建议**: 将gate_judge_pipeline接入, 替换当前的组合逻辑矩形判断, 可获得:
-- 流水线化的时序优势
-- 多边形和椭圆门控支持
-- 更规范的触发-结果接口
-
-接入方式:
-```verilog
-gate_judge_pipeline #(
-    .C_NUM_MAX_POINTS(12),
-    .C_POINT_DATA_WIDTH(32)
-) u_gate_judge (
-    .rst_n(S_AXI_ARESETN),
-    .sys_clk(S_AXI_ACLK),
-    .enable(sort_en),
-    .trigger(event_done),       // 事件结束时触发判断
-    .point_x(sort_compare_value_x),
-    .point_y(sort_compare_value_y),
-    .gate_type(slv_regXX[2:0]),  // 从寄存器读取门控类型
-    .gate_points_num(...),
-    .gate_points_x_pack(...),    // 从寄存器组读取门控顶点
-    .gate_points_y_pack(...),
-    .valid(gate_valid),
-    .result(gate_result)
-);
-```
-
-需要为gate的顶点坐标分配寄存器空间 (当前有大量未使用的slv_reg可用)。
-
-### 4.2 speed_measure模块未使用
-
-`speed_measure.v`是一个完整的速度测量状态机, 具有超时检测、计数器等功能, 但未被实例化。event_aggregator内部的速度测量只做了简单减法, 缺少:
-- 超时保护
-- pre/post事件匹配验证
-- 独立的事件计数
-
-**建议**: 考虑使用speed_measure替换event_aggregator中的简化实现, 或将其功能合并。
-
-### 4.3 寄存器映射文档缺失
-
-64个AXI寄存器中, 只有部分有注释说明用途。建议建立完整的寄存器映射表:
-
-| 寄存器 | 偏移地址 | 用途 | 读写 |
-|--------|----------|------|------|
-| slv_reg0 | 0x00 | [0]=analyze_en, [1]=sort_en | R/W |
-| slv_reg1 | 0x04 | [7:0]=enabled_channels | R/W |
-| slv_reg2-7 | 0x08-0x1C | 未使用/保留 | R/W |
-| slv_reg8-15 | 0x20-0x3C | 通道0-7阈值 | R/W |
-| slv_reg16 | 0x40 | 分选参数配置 | R/W |
-| slv_reg17 | 0x44 | 门控类型[2:0]和门控数据点数[7:4] | R/W |
-| slv_reg18-29 | 0x48-0x84 | X轴门控范围 | R/W |
-| slv_reg30-41 | 0x88-0xA4 | Y轴门控范围 | R/W |
-| slv_reg47 | 0xBC | delay_calcu_coe | R/W |
-| slv_reg48 | 0xC0 | [0]=drive_type, [1]=purity_en | R/W |
-| slv_reg49 | 0xC4 | drive_delay | R/W |
-| slv_reg50 | 0xC8 | drive_width | R/W |
-| slv_reg51 | 0xCC | cooling_time | R/W |
-| slv_reg52 | 0xD0 | [2:0]=speed_pre, [10:8]=speed_post | R/W |
-| slv_reg53 | 0xD4 | max_time_diff | R/W |
-| slv_reg54 | 0xD8 | dist | R/W |
-| slv_reg55 | 0xDC | min_event_interval (高纯度模式, us) | R/W |
-| reg56(读) | 0xE0 | [23:0]=last_written_addr, [24]=wrap | R |
-| reg57(读) | 0xE4 | event_counter | R |
-
-### 4.4 BRAM容量与事件大小匹配
-
-BRAM大小为32KB (BRAM_SIZE_BYTES=0x8000)。每个事件的BRAM写入量为:
-
-```
-1 (magic_head) + 1 (header) + 1 (time_diff) + 1 (post_time) 
-+ N_enabled * 3 (peak+width+area) + 1 (magic_tail) = 5 + 3*N
-```
-
-8通道全开时: 5 + 24 = 29 words = 116 bytes。32KB可存储约282个事件。
-
-如果事件速率高 (如10,000 events/s), 缓冲区仅能存储约28ms的数据。PS端需要在此时间窗口内完成读取, 否则数据会被覆盖。
-
-**建议**: 
-- 考虑添加BRAM满/半满中断信号, 通知PS端及时读取
-- 可选: 添加BRAM读写保护, 防止写指针追上读指针
-
-### 4.5 事件丢失风险
+### 4.3 BRAM 容量保护
 
 **文件**: `event_aggregator.v`
 
-当FSM正在写入BRAM时 (非S_IDLE状态), 如果有新的event_done到来, 该事件会被丢失 (event_done只有一个时钟周期宽度, 不会被锁存)。
+BRAM 32KB 环形缓冲区无满保护。8通道全开时每事件116字节，约可存282个事件。如果 PS 端读取不及时，旧数据被覆盖无任何提示。
 
-对于高速事件流 (事件间隔小于BRAM写入时间), 可能导致事件丢失。
-
-**建议**: 添加事件FIFO或双缓冲机制, 确保BRAM写入期间的事件不丢失。
+**建议**: 添加BRAM半满/满中断信号，或实现读写指针保护（PS写入read_ptr，PL检查 write_ptr 不超过 read_ptr）。
 
 ---
 
 ## 5. 代码质量
 
-### 5.1 注释和残留代码
+### 5.1 复位风格不一致
 
-- 多处被注释掉的`(*MARK_DEBUG="true"*)`调试标记, 建议在发布版本中清理
-- `pulse_analyzer.v:112` 包含乱码注释 `// If below threshold for debounce length 锟�? end pulse`
-- `signal_analyzer_v1_0_S00_AXI.v:1356-1374` 包含大段注释掉的模块接口模板
-- `ad_data_filter.v:81-98` 包含注释掉的初始化逻辑
+| 风格 | 使用位置 |
+|------|----------|
+| 异步复位 `always @(posedge clk or negedge rst_n)` | pulse_analyzer, event_aggregator, drive_signal_generation, gate_judge_pipeline |
+| 同步复位 `always @(posedge S_AXI_ACLK) if (!ARESETN)` | AXI标准接口部分 |
 
-### 5.2 未使用的信号
+混合风格在功能上可工作（同一复位源），但可能导致综合约束复杂化。
 
-- `dist` (slv_reg54) 被声明和赋值但未被任何模块使用
-- `speed_measure.v` 整个模块未被实例化
-- 大量slv_reg (2-7, 17-31, 34-39, 42-46, 55, 58-63) 未被用户逻辑引用
+**建议**: Xilinx FPGA 推荐同步复位（有利于综合优化）。统一为一种风格。
 
-### 5.3 可综合性建议
+### 5.2 被注释的代码
 
-- `event_aggregator.v` 使用 `integer idx` 作为for循环变量, 建议改用固定宽度的reg
-- 多处使用 `$clog2()` 函数, 确认综合工具支持 (Vivado支持)
+| 文件 | 行号 | 内容 |
+|------|------|------|
+| `ad_data_filter.v` | 81-98 | 旧的滑动窗口方案 |
+| `event_aggregator.v` | 142-148 | 未完成的 ch_pulse_valid 逻辑 |
+| `signal_analyzer_v1_0_S00_AXI.v` | 1437-1454 | pulse_analyzer 旧接口模板 |
+| `signal_analyzer_v1_0_S00_AXI.v` | 1521-1536 | drive_signal_generation 旧接口模板 |
+
+**建议**: 清理，使用 git history 追溯旧代码即可。
+
+### 5.3 乱码注释
+
+- `pulse_analyzer.v:128`: `// If below threshold for debounce length ⁇? end pulse`
+- `speed_measure.v:60`: `// ⁇32位的max_time_diff扩展⁇64位后再相⁇`
+- `signal_analyzer_v1_0_S00_AXI.v:1441`: `// ȥ⁇⁇⁇⁇⁇⁇??????`
+
+**建议**: 修复编码或改用英文注释。
+
+### 5.4 `dist` 信号声明但未使用
+
+**文件**: `signal_analyzer_v1_0_S00_AXI.v:304,1417`
+
+```verilog
+wire signed [31:0] dist;
+assign dist = slv_reg54[31:0];
+```
+
+`dist` 被声明和赋值但从未被任何模块消费。
 
 ---
 
-## 6. 总结
+## 6. 寄存器映射表
 
-### 已修复 (2026-04-02)
-1. ~~speed_post通道pulse_analyzer未使能 (2.1)~~ -- 已在enabled条件中添加speed_post
-2. ~~32位时间戳回绕导致驱动信号异常 (2.2)~~ -- drive_signal_generation时间寄存器已扩展为64位
-3. ~~BRAM端口方向声明 (2.4)~~ -- 已添加`output`关键字
-4. ~~复位风格统一 (3.1)~~ -- pulse_analyzer和ad_data_filter已改为异步复位
-5. ~~sort_trig组合逻辑时序 (3.3)~~ -- 已替换为gate_judge_pipeline流水线实现
-6. ~~接入gate_judge_pipeline (4.1)~~ -- 已接入, 使用slv_reg17配置门控类型, slv_reg18-41配置门控顶点
-7. 新增高纯度分选模式 -- slv_reg48[1]=purity_en, slv_reg55=min_event_interval
+| 寄存器 | 偏移 | 用途 | R/W |
+|--------|------|------|-----|
+| slv_reg0 | 0x00 | [0]=analyze_en, [1]=sort_en | R/W |
+| slv_reg1 | 0x04 | [7:0]=enabled_channels | R/W |
+| slv_reg2~7 | 0x08~0x1C | 保留 | R/W |
+| slv_reg8~15 | 0x20~0x3C | Ch0~Ch7 阈值 [17:0] | R/W |
+| slv_reg16 | 0x40 | X: [2:0]=sort_ch, [9:8]=sort_type; Y: [18:16]=sort_ch, [25:24]=sort_type | R/W |
+| slv_reg17 | 0x44 | [2:0]=gate_type, [7:4]=gate_points_num | R/W |
+| slv_reg18~29 | 0x48~0x74 | gate_points_x[0..11] | R/W |
+| slv_reg30~41 | 0x78~0xA4 | gate_points_y[0..11] | R/W |
+| slv_reg42~46 | 0xA8~0xB8 | 保留 | R/W |
+| slv_reg47 | 0xBC | delay_calcu_coe (速度补偿系数) | R/W |
+| slv_reg48 | 0xC0 | [0]=drive_type(0:Level,1:Edge), [1]=purity_en | R/W |
+| slv_reg49 | 0xC4 | drive_delay (us) | R/W |
+| slv_reg50 | 0xC8 | drive_width (us, Level模式) | R/W |
+| slv_reg51 | 0xCC | cooling_time (us) | R/W |
+| slv_reg52 | 0xD0 | [2:0]=speed_pre_channel, [10:8]=speed_post_channel | R/W |
+| slv_reg53 | 0xD4 | max_time_diff (us, 速度测量超时) | R/W |
+| slv_reg54 | 0xD8 | dist (未使用) | R/W |
+| slv_reg55 | 0xDC | min_event_interval (us, 高纯度模式) | R/W |
+| slv_reg56 | 0xE0 | **只读**: [23:0]=last_written_addr, [24]=wrap_around | R |
+| slv_reg57 | 0xE4 | **只读**: event_counter | R |
+| slv_reg58~63 | 0xE8~0xFC | 保留 | R/W |
 
-### 待修复
-- 脉冲去抖期间面积/宽度计算误差 (2.3)
+---
 
-### 功能增强建议 (未实施)
-- 添加BRAM满中断 / 事件丢失保护 (4.4, 4.5)
-- 提高速度测量精度 (3.2)
-- 建立完整寄存器映射文档 (4.3)
+## 7. 本次会话已修复的问题
 
+### 7.1 sort_trig 持续高电平导致分选驱动无法再次触发
 
-  ### 修改总结(2026-04-03)
+**文件**: `signal_analyzer_v1_0_S00_AXI.v:1329`
 
-  问题： 椭圆门的 Stage 3（132-bit 乘积寄存器）到 result_reg 之间存在 132-bit 加法 + 132-bit 比较的纯组合逻辑路径，在 200 MHz
-  下无法在 5 ns 内完成（需要 ~5.27 ns）。
+**原因**: `sort_trig_reg` 仅在 `gate_valid_out` 为高时更新，两次事件之间保持旧值。连续分选事件导致信号持续为高，`drive_signal_generation` 中的上升沿检测器无法产生新的 `sort_start`。
 
-  修复： 在 gate_judge_pipeline.v 中增加 Stage 4 流水线寄存器，将 ell_t1 + ell_t2 <= ell_rhs 的结果打一拍：
+**修复**: 添加 `sort_trig_reg <= 1'b0` 每周期默认清零，使其成为单周期脉冲。
 
-  1. 新增 Stage 4 寄存器 ell_result_r（第 222-232 行）— 将 132-bit 加法和比较的结果寄存
-  2. 椭圆计数器判定值 从 3'd3 改为 3'd4（第 336 行）— 多等一个周期采样 Stage 4 结果
+### 7.2 通道无有效脉冲时分析结果保留旧值
 
-  影响： 椭圆门延迟从 4 周期增加到 5 周期（25 ns → 30 ns），对系统功能无影响，因为事件处理速率（~10
-  kHz）远低于时钟频率。修改后最长组合路径从 ~5.27 ns 缩短到约 2.5 ns，有充足的时序裕量。
+**文件**: `pulse_analyzer.v:34,57,79-87,133`
 
+**原因**: pulse_analyzer 输出（peak/width/area/peak_time）仅在 `pulse_done` 时更新，无脉冲时保留上次旧值，导致 gate_judge 使用陈旧数据做判断。
 
+**修复**: 新增 `event_done` 输入端口和 `pulse_occurred` 追踪寄存器。事件结束时，如果该通道在整个事件期间没有产生过有效脉冲，则将输出清零。
+
+---
+
+## 8. 修改历史
+
+| 日期 | 内容 |
+|------|------|
+| 2026-04-01 | 初始 code review |
+| 2026-04-02 | 修复 speed_post 使能、64位时间戳、BRAM端口声明、复位风格统一、接入 gate_judge_pipeline、新增高纯度模式 |
+| 2026-04-03 | 修复椭圆门控时序违例：增加 Stage 4 流水线寄存器，椭圆延迟从4周期增至5周期 |
+| 2026-04-06 | 修复 sort_trig 持续高电平 bug；修复无效通道脉冲结果未清零问题；全面 code review 更新 |
