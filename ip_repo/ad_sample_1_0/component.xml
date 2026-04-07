@@ -1403,8 +1403,8 @@
       <xilinx:xpmLibraries>
         <xilinx:xpmLibrary>XPM_FIFO</xilinx:xpmLibrary>
       </xilinx:xpmLibraries>
-      <xilinx:coreRevision>60</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-04-02T10:57:02Z</xilinx:coreCreationDateTime>
+      <xilinx:coreRevision>61</xilinx:coreRevision>
+      <xilinx:coreCreationDateTime>2026-04-06T11:10:03Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2023.1</xilinx:xilinxVersion>
