@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// AD7606C-18 Parallel Interface (Final Optimized Pipeline Version)
-// 
-// 基于原始代码架构，保持双状�?�机流水线设�?
+// AD7606C-18 Parallel Interface
 //////////////////////////////////////////////////////////////////////////////////
 
 module ad_7606c_if #(
@@ -14,11 +12,11 @@ module ad_7606c_if #(
 
     parameter integer RD_LOW_CYCLES         = 6,    // 30ns (spec: >=10ns)
     parameter integer RD_CYCLE_CYCLES       = 10,   // 50ns full RD cycle
-    parameter integer RD_DATA_SAMPLE        = 5,    // 25ns后采样数�?
+    parameter integer RD_DATA_SAMPLE        = 5,    // 25ns
     
     // Configuration write timing
     parameter integer CFG_SETUP_CYCLES      = 6,    // 30ns
-    parameter integer CFG_WR_CYCLES         = 10,    // 50ns (spec: >=35ns) ***FIXED***
+    parameter integer CFG_WR_CYCLES         = 10,    // 50ns (spec: >=35ns)
     parameter integer CFG_HOLD_CYCLES       = 6     // 30ns
 )(
     input              ad_clk,         // 200MHz clk
@@ -72,15 +70,17 @@ reg [2:0]  valid_hold_cnt;
 localparam CFGW_IDLE   = 4'd0,
            CFGW_SETUP  = 4'd1,
            CFGW_WRLOW  = 4'd2,
-           CFGW_HOLD   = 4'd3,
-           CFGW_NEXT   = 4'd4,
-           CFGW_DONE   = 4'd5,
+           CFGW_WRHIGH = 4'd3,
+           CFGW_HOLD   = 4'd4,
+           CFGW_RD_PRE = 4'd5,  // release bus (db_oe=0), let chip drive
+           CFGW_RD_LOW  = 4'd6,  // RD low: chip clocks register data out
+           CFGW_RD_HIGH = 4'd7,  // RD high: end of read frame 
+           CFGW_NEXT   = 4'd8,
+           CFGW_DONE   = 4'd9;
            // ---- Extra states: complete the dummy READ frame after the
            // ---- R/W=1 command, so the chip is fully in register mode
            // ---- per datasheet "register read = two frames" definition.
-           CFGW_RD_PRE = 4'd6,  // release bus (db_oe=0), let chip drive
-           CFGW_RDLOW  = 4'd7,  // RD low: chip clocks register data out
-           CFGW_RDHIGH = 4'd8;  // RD high: end of read frame
+           
 
 reg [3:0] cfgw_state;
 reg [5:0] cfgw_cnt;
@@ -158,19 +158,20 @@ function [15:0] cfgw_word(input [2:0] idx);
         case (idx)
             // ---- Enter REGISTER MODE: dummy read of STATUS (0x01) ----
             3'd0: cfgw_word = {1'b1, 7'h01, 8'h00};
+            3'd1: cfgw_word = {1'b1, 7'h01, 8'h00}; // read twice to improve stability
             // ---- Register writes ----
             // 0x03: CH1_CH2 Range, 0x11 = both ±5V single-ended
-            3'd1: cfgw_word = {1'b0, 7'h03, 8'h11};
+            3'd2: cfgw_word = {1'b0, 7'h03, 8'h11};
             // 0x04: CH3_CH4 Range
-            3'd2: cfgw_word = {1'b0, 7'h04, 8'h11};
+            3'd3: cfgw_word = {1'b0, 7'h04, 8'h11};
             // 0x05: CH5_CH6 Range
-            3'd3: cfgw_word = {1'b0, 7'h05, 8'h11};
+            3'd4: cfgw_word = {1'b0, 7'h05, 8'h11};
             // 0x06: CH7_CH8 Range
-            3'd4: cfgw_word = {1'b0, 7'h06, 8'h11};
+            3'd5: cfgw_word = {1'b0, 7'h06, 8'h11};
             // 0x07: Bandwidth = 0xFF (all channels high bandwidth)
-            3'd5: cfgw_word = {1'b0, 7'h07, 8'hFF};
+            3'd6: cfgw_word = {1'b0, 7'h07, 8'hFF};
             // ---- Exit REGISTER MODE: WR cycle with all DBx = 0 ----
-            3'd6: cfgw_word = 16'h0000;
+            3'd7: cfgw_word = 16'h0000;
             default: cfgw_word = 16'h0000;
         endcase
     end
@@ -211,8 +212,11 @@ always @(posedge ad_clk) begin
         // ============================================
         case (cfgw_state)
             CFGW_IDLE: begin
-                ad_cs      <= 1'b0;
-                cfgw_state <= CFGW_SETUP;
+                if (ad_busy == 1'b0) begin
+                    ad_cs      <= 1'b0;
+                    cfgw_cnt <= 6'd0;
+                    cfgw_state <= CFGW_SETUP;
+                end
             end
 
             CFGW_SETUP: begin
@@ -231,14 +235,19 @@ always @(posedge ad_clk) begin
                 ad_wr <= 1'b0;
                 if (cfgw_cnt == CFG_WR_CYCLES - 1) begin
                     cfgw_cnt   <= 6'd0;
-                    cfgw_state <= CFGW_HOLD;
+                    cfgw_state <= CFGW_WRHIGH;
                 end else begin
                     cfgw_cnt <= cfgw_cnt + 1'b1;
                 end
             end
 
-            CFGW_HOLD: begin
+            CFGW_WRHIGH: begin
                 ad_wr <= 1'b1;
+                cfgw_cnt <= 6'd0;
+                cfgw_state <= CFGW_HOLD;
+            end
+
+            CFGW_HOLD: begin
                 if (cfgw_cnt == CFG_HOLD_CYCLES - 1) begin
                     cfgw_cnt <= 6'd0;
                     // After idx==0 (the dummy READ command), perform the
@@ -246,7 +255,7 @@ always @(posedge ad_clk) begin
                     // with the datasheet's "register read = two frames"
                     // definition. For all subsequent (write) frames just
                     // continue with the next register.
-                    if (cfgw_idx == 3'd0)
+                    if (cfgw_idx < 3'd2)
                         cfgw_state <= CFGW_RD_PRE;
                     else
                         cfgw_state <= CFGW_NEXT;
@@ -260,45 +269,64 @@ always @(posedge ad_clk) begin
                 // during the upcoming RD pulse. A few cycles of dead time
                 // give the IOBUFs time to flip direction safely.
                 db_oe <= 1'b0;
+                ad_rd <= 1'b1;
                 if (cfgw_cnt == CFG_SETUP_CYCLES - 1) begin
                     cfgw_cnt   <= 6'd0;
-                    cfgw_state <= CFGW_RDLOW;
+                    cfgw_state <= CFGW_RD_LOW;
                 end else begin
                     cfgw_cnt <= cfgw_cnt + 1'b1;
                 end
             end
 
-            CFGW_RDLOW: begin
+            CFGW_RD_LOW: begin
                 ad_rd <= 1'b0;
                 if (cfgw_cnt == RD_LOW_CYCLES - 1) begin
                     cfgw_cnt   <= 6'd0;
-                    cfgw_state <= CFGW_RDHIGH;
+                    cfgw_state <= CFGW_RD_HIGH;
                 end else begin
                     cfgw_cnt <= cfgw_cnt + 1'b1;
                 end
             end
 
-            CFGW_RDHIGH: begin
+            CFGW_RD_HIGH: begin
                 ad_rd <= 1'b1;
+                cfgw_cnt <= 6'd0;
+                cfgw_state <= CFGW_NEXT;
                 // db_in (register content) is intentionally discarded.
-                if (cfgw_cnt == CFG_HOLD_CYCLES - 1) begin
-                    cfgw_cnt   <= 6'd0;
-                    cfgw_state <= CFGW_NEXT;
-                end else begin
-                    cfgw_cnt <= cfgw_cnt + 1'b1;
-                end
+                // if (cfgw_cnt == CFG_HOLD_CYCLES - 1) begin
+                //     cfgw_cnt   <= 6'd0;
+                //     cfgw_state <= CFGW_NEXT;
+                // end else begin
+                //     cfgw_cnt <= cfgw_cnt + 1'b1;
+                // end
             end
 
             CFGW_NEXT: begin
                 // idx 0     : enter register mode (dummy read cmd)
                 // idx 1..5  : actual register writes
                 // idx 6     : exit register mode (DBx all zero WR cycle)
-                if (cfgw_idx == 3'd6)
-                    cfgw_state <= CFGW_DONE;
-                else begin
-                    cfgw_idx   <= cfgw_idx + 1'b1;
-                    cfgw_state <= CFGW_SETUP;
+                ad_cs <= 1'b1;
+                if (cfgw_cnt == 6'd2) begin
+                    cfgw_cnt <= 6'd0;
+                    ad_cs <= 1'b0;
+
+                    if (cfgw_idx == 3'd7) begin
+                        cfgw_state <= CFGW_DONE;
+                    end else begin
+                        cfgw_idx <= cfgw_idx + 1;
+                        cfgw_state <= CFGW_SETUP;
+                    end
+                end else begin
+                    cfgw_cnt <= cfgw_cnt + 1;
                 end
+
+
+                // if (cfgw_idx == 3'd6)
+                //     cfgw_state <= CFGW_DONE;
+                // else begin
+                //     cfgw_idx   <= cfgw_idx + 1'b1;
+                //     cfgw_state <= CFGW_SETUP;
+                // end
             end
 
             CFGW_DONE: begin

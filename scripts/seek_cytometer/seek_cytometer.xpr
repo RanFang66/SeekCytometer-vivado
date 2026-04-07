@@ -71,13 +71,13 @@
     <Option Name="WTVcsLaunchSim" Val="0"/>
     <Option Name="WTRivieraLaunchSim" Val="0"/>
     <Option Name="WTActivehdlLaunchSim" Val="0"/>
-    <Option Name="WTXSimExportSim" Val="89"/>
-    <Option Name="WTModelSimExportSim" Val="89"/>
-    <Option Name="WTQuestaExportSim" Val="89"/>
+    <Option Name="WTXSimExportSim" Val="91"/>
+    <Option Name="WTModelSimExportSim" Val="91"/>
+    <Option Name="WTQuestaExportSim" Val="91"/>
     <Option Name="WTIesExportSim" Val="0"/>
-    <Option Name="WTVcsExportSim" Val="89"/>
-    <Option Name="WTRivieraExportSim" Val="89"/>
-    <Option Name="WTActivehdlExportSim" Val="89"/>
+    <Option Name="WTVcsExportSim" Val="91"/>
+    <Option Name="WTRivieraExportSim" Val="91"/>
+    <Option Name="WTActivehdlExportSim" Val="91"/>
     <Option Name="GenerateIPUpgradeLog" Val="TRUE"/>
     <Option Name="XSimRadix" Val="hex"/>
     <Option Name="XSimTimeUnit" Val="ns"/>
@@ -101,20 +101,8 @@
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_rst_ps8_0_199M_1/cytometer_platform_rst_ps8_0_199M_1.xci">
-          <Proxy FileSetName="cytometer_platform_rst_ps8_0_199M_1"/>
-        </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_dma_0_0/cytometer_platform_axi_dma_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_axi_dma_0_0"/>
-        </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axis_register_slice_0_0/cytometer_platform_axis_register_slice_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_axis_register_slice_0_0"/>
-        </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_blk_mem_gen_0_0/cytometer_platform_blk_mem_gen_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_blk_mem_gen_0_0"/>
-        </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_bram_ctrl_0_0/cytometer_platform_axi_bram_ctrl_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_axi_bram_ctrl_0_0"/>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_signal_analyzer_0_1/cytometer_platform_signal_analyzer_0_1.xci">
+          <Proxy FileSetName="cytometer_platform_signal_analyzer_0_1"/>
         </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_zynq_ultra_ps_e_0_0/cytometer_platform_zynq_ultra_ps_e_0_0.xci">
           <Proxy FileSetName="cytometer_platform_zynq_ultra_ps_e_0_0"/>
@@ -122,11 +110,23 @@
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_xbar_0/cytometer_platform_xbar_0.xci">
           <Proxy FileSetName="cytometer_platform_xbar_0"/>
         </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_signal_analyzer_0_1/cytometer_platform_signal_analyzer_0_1.xci">
-          <Proxy FileSetName="cytometer_platform_signal_analyzer_0_1"/>
-        </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_ad_sample_0_0/cytometer_platform_ad_sample_0_0.xci">
           <Proxy FileSetName="cytometer_platform_ad_sample_0_0"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_dma_0_0/cytometer_platform_axi_dma_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_axi_dma_0_0"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_rst_ps8_0_199M_1/cytometer_platform_rst_ps8_0_199M_1.xci">
+          <Proxy FileSetName="cytometer_platform_rst_ps8_0_199M_1"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axis_register_slice_0_0/cytometer_platform_axis_register_slice_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_axis_register_slice_0_0"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_bram_ctrl_0_0/cytometer_platform_axi_bram_ctrl_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_axi_bram_ctrl_0_0"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_blk_mem_gen_0_0/cytometer_platform_blk_mem_gen_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_blk_mem_gen_0_0"/>
         </CompFileExtendedInfo>
       </File>
       <File Path="$PPRDIR/../../seek_cytometer/seek_cytometer.gen/sources_1/bd/cytometer_platform/hdl/cytometer_platform_wrapper.v">
@@ -244,15 +244,15 @@
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
-    <FileSet Name="cytometer_platform_ad_sample_0_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/cytometer_platform_ad_sample_0_0" RelGenDir="$PGENDIR/cytometer_platform_ad_sample_0_0">
-      <Config>
-        <Option Name="TopModule" Val="cytometer_platform_ad_sample_0_0"/>
-        <Option Name="UseBlackboxStub" Val="1"/>
-      </Config>
-    </FileSet>
     <FileSet Name="cytometer_platform_signal_analyzer_0_1" Type="BlockSrcs" RelSrcDir="$PSRCDIR/cytometer_platform_signal_analyzer_0_1" RelGenDir="$PGENDIR/cytometer_platform_signal_analyzer_0_1">
       <Config>
         <Option Name="TopModule" Val="cytometer_platform_signal_analyzer_0_1"/>
+        <Option Name="UseBlackboxStub" Val="1"/>
+      </Config>
+    </FileSet>
+    <FileSet Name="cytometer_platform_ad_sample_0_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/cytometer_platform_ad_sample_0_0" RelGenDir="$PGENDIR/cytometer_platform_ad_sample_0_0">
+      <Config>
+        <Option Name="TopModule" Val="cytometer_platform_ad_sample_0_0"/>
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
@@ -356,7 +356,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="cytometer_platform_ad_sample_0_0_synth_1" Type="Ft3:Synth" SrcSet="cytometer_platform_ad_sample_0_0" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_ad_sample_0_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/cytometer_platform_ad_sample_0_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_synth_1">
+    <Run Id="cytometer_platform_signal_analyzer_0_1_synth_1" Type="Ft3:Synth" SrcSet="cytometer_platform_signal_analyzer_0_1" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023"/>
         <Step Id="synth_design"/>
@@ -366,9 +366,11 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="cytometer_platform_signal_analyzer_0_1_synth_1" Type="Ft3:Synth" SrcSet="cytometer_platform_signal_analyzer_0_1" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1">
+    <Run Id="cytometer_platform_ad_sample_0_0_synth_1" Type="Ft3:Synth" SrcSet="cytometer_platform_ad_sample_0_0" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_ad_sample_0_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/cytometer_platform_ad_sample_0_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_synth_1">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023"/>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
+          <Desc>Vivado Synthesis Defaults</Desc>
+        </StratHandle>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -513,7 +515,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="cytometer_platform_ad_sample_0_0_impl_1" Type="Ft2:EntireDesign" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_ad_sample_0_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="cytometer_platform_ad_sample_0_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_impl_1">
+    <Run Id="cytometer_platform_signal_analyzer_0_1_impl_1" Type="Ft2:EntireDesign" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023"/>
         <Step Id="init_design"/>
@@ -530,9 +532,11 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="cytometer_platform_signal_analyzer_0_1_impl_1" Type="Ft2:EntireDesign" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1">
+    <Run Id="cytometer_platform_ad_sample_0_0_impl_1" Type="Ft2:EntireDesign" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_ad_sample_0_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="cytometer_platform_ad_sample_0_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_ad_sample_0_0_impl_1">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023"/>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
+          <Desc>Default settings for Implementation.</Desc>
+        </StratHandle>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>
