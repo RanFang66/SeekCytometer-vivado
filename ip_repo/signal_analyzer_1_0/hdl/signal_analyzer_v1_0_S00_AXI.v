@@ -260,6 +260,7 @@
 
 	reg  analyze_en;
 	reg  sort_en;
+	reg  speed_measure_en;
 
 	reg  ad_data_valid_d0;
 	reg  ad_data_valid_d1;
@@ -1379,16 +1380,18 @@
 	assign dist = slv_reg54[31:0]; // Distance in um for speed measurement
 	assign event_peak_time = peak_time[speed_post];
 
-	// Enable signals for the analyzer and sorting
+	// Enable signals for the analyzer, sorting, and speed measurement
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
 		if (!S_AXI_ARESETN) begin
 			analyze_en <= 1'b0;
 			sort_en <= 1'b0;
+			speed_measure_en <= 1'b0;
 			ad_data_valid_d0 <= 1'b0;
 			ad_data_valid_d1 <= 1'b0;
 		end else begin
 			analyze_en <= slv_reg0[0]; // Enable signal for the analyzer
 			sort_en <= slv_reg0[1]; // Enable signal for sorting
+			speed_measure_en <= slv_reg0[2]; // Enable signal for speed measurement
 			ad_data_valid_d0 <= ad_data_valid; // ADC data valid signal
 			ad_data_valid_d1 <= ad_data_valid_d0;
 		end
@@ -1436,6 +1439,7 @@
 		.ch_area_flat(ch_area_flat),
 		.ch_peak_time_flat(ch_peak_time_flat),
 
+		.speed_measure_en(speed_measure_en),
 		.speed_pre_channel(speed_pre),
 		.speed_post_channel(speed_post),
 		.max_time_diff(max_time_diff),
@@ -1476,6 +1480,7 @@
 		.drive_width(drive_width),
 		.cooling_time(cooling_time),
 
+		.speed_measure_en(speed_measure_en),
    		.measured_time_diff(time_diff[15:0]),
     	.measured_coe(delay_calcu_coe),
 

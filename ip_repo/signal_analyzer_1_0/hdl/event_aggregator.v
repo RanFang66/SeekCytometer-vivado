@@ -19,6 +19,7 @@ module event_aggregator #(
     input  wire [2:0]               drive_state,
 
 
+    input wire                      speed_measure_en,   // Enable speed measurement functionality
     input wire [2:0]                speed_pre_channel,  // Channel index for pre-event (0 to NUM_CH-1)
     input wire [2:0]                speed_post_channel, // Channel index for post-event (0 to NUM_CH-1)
     input wire [31:0]               max_time_diff,      // Maximum valid time difference for speed measurement
@@ -80,9 +81,12 @@ module event_aggregator #(
     endgenerate
 
     // ------------- event detection (same clk domain assumed) -------------
-    wire [NUM_CH-1 : 0] ch_pulse_active_mask = ch_pulse_active & enable_mask;
+    // When speed measurement is enabled, exclude speed_pre_channel from event active judgment
+    // because the pre-channel is only used for speed calculation, not for event start/end detection
+    wire [NUM_CH-1:0] speed_pre_exclude = speed_measure_en ? (8'd1 << speed_pre_channel) : 8'd0;
+    wire [NUM_CH-1:0] ch_pulse_active_mask = ch_pulse_active & enable_mask & ~speed_pre_exclude;
     wire    event_active_masked = (ch_pulse_active_mask != {NUM_CH{1'b0}});
-    assign  event_active = event_active_masked;//|(ch_pulse_active & enable_mask);
+    assign  event_active = event_active_masked;
     // detect falling edge of event_active_masked => event_done pulse
     reg event_active_d;
     always @(posedge clk or negedge rst_n) begin
@@ -205,12 +209,17 @@ module event_aggregator #(
                         // bits [20:21] will be set in S_WAIT_GATE after gate judge completes
 
                         latched_post_event_time <= speed_post_time;
-                        if (time_diff < max_time_diff) begin
-                            latched_time_diff <= time_diff[31:0];
-                            latched_header[22] <= 1'b1; // valid speed measurement
-                        end else begin // keep previous values
-                            latched_time_diff <= latched_time_diff;
-                            latched_header[22] <= 1'b0; // invalid speed measurement
+                        if (speed_measure_en) begin
+                            if (time_diff < max_time_diff) begin
+                                latched_time_diff <= time_diff[31:0];
+                                latched_header[22] <= 1'b1; // valid speed measurement
+                            end else begin // keep previous values
+                                latched_time_diff <= latched_time_diff;
+                                latched_header[22] <= 1'b0; // invalid speed measurement
+                            end
+                        end else begin
+                            latched_time_diff <= 32'd0;
+                            latched_header[22] <= 1'b0; // speed measurement disabled
                         end
 
                         latched_header[31:24] <= ch_pulse_valid;

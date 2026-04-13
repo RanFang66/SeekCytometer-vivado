@@ -17,6 +17,7 @@
     input wire [31:0] drive_delay,
     input wire [31:0] drive_width,
     input wire [31:0] cooling_time,
+    input wire        speed_measure_en,
     input wire [15:0] measured_time_diff,
     input wire [31:0] measured_coe,
 
@@ -57,10 +58,17 @@
             delay_calculated <= 48'b0;
             delay_total <= 48'b0;
         end else begin
-            delay_calculated <= measured_time_diff * measured_coe;    
-            delay_total <= (delay_calculated >> 14) + drive_delay;
+            if (speed_measure_en) begin
+                // Speed-based delay: scale measured time difference by coefficient
+                delay_calculated <= measured_time_diff * measured_coe;
+                delay_total <= (delay_calculated >> 14) + drive_delay;
+            end else begin
+                // Fixed delay when speed measurement is disabled
+                delay_calculated <= 48'b0;
+                delay_total <= {16'b0, drive_delay};
+            end
         end
-    end 
+    end
 
 
     always @(posedge clk or negedge rst_n) begin
