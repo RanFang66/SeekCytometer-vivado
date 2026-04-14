@@ -1261,7 +1261,7 @@
 	);
 
 	// Latch channel validity and gate result for sort trigger
-	reg ch_sort_valid_latched;
+	// reg ch_sort_valid_latched;
 	reg sort_trig_reg;
 	reg sort_ready;
 
@@ -1271,7 +1271,7 @@
 	reg last_event_was_sort;
 	reg sort_abort;
 
-	wire current_event_is_sort = sort_en && gate_result_out && ch_sort_valid_latched;
+	wire current_event_is_sort = sort_en && gate_result_out; // && ch_sort_valid_latched;
 	wire [63:0] event_interval = current_event_time - last_event_time;
 	wire interval_too_close = (event_interval < {32'd0, min_event_interval});
 
@@ -1281,7 +1281,7 @@
 
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
 		if (!S_AXI_ARESETN) begin
-			ch_sort_valid_latched <= 1'b0;
+			// ch_sort_valid_latched <= 1'b0;
 			sort_trig_reg <= 1'b0;
 			sort_ready <= 1'b0;
 			current_event_time <= 64'd0;
@@ -1293,7 +1293,7 @@
 			sort_trig_reg <= 1'b0; // default: single-cycle pulse
 
 			if (event_done) begin
-				ch_sort_valid_latched <= ch_pulse_valid[sort_ch_x] && ch_pulse_valid[sort_ch_y];
+				// ch_sort_valid_latched <= ch_pulse_valid[sort_ch_x] && ch_pulse_valid[sort_ch_y];
 				current_event_time <= time_stamp_us;
 				sort_ready <= 1'b0;
 			end
