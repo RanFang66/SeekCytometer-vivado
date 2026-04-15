@@ -20,6 +20,8 @@
     input wire        speed_measure_en,
     input wire [15:0] measured_time_diff,
     input wire [31:0] measured_coe,
+    (*MARK_DEBUG="true"*)
+    input wire        delay_refer_en,
 
     (*MARK_DEBUG="true"*)
     output reg [2:0]  drive_state,
@@ -43,7 +45,8 @@
     reg                 drive_level_edge;
     (*MARK_DEBUG="true"*)
     reg [47:0]          delay_calculated;           // 32 + 16
-    reg [47:0]          delay_total;
+    // delay_total is signed: drive_delay may be negative (sign-extended from 32 bits).
+    reg signed [47:0]   delay_total;
 
 
     assign drive_level = (drive_type) ? drive_level_edge : (drive_state == S_DRIVE_HIGH);
@@ -59,13 +62,14 @@
             delay_total <= 48'b0;
         end else begin
             if (speed_measure_en) begin
-                // Speed-based delay: scale measured time difference by coefficient
+                // Speed-based delay: scale measured time difference by coefficient.
+                // (delay_calculated >> 14) is unsigned; drive_delay is sign-extended.
                 delay_calculated <= measured_time_diff * measured_coe;
-                delay_total <= (delay_calculated >> 14) + drive_delay;
+                delay_total <= $signed({2'b00, delay_calculated[47:14]}) + $signed({{16{drive_delay[31]}}, drive_delay});
             end else begin
-                // Fixed delay when speed measurement is disabled
+                // Fixed delay when speed measurement is disabled (sign-extend drive_delay).
                 delay_calculated <= 48'b0;
-                delay_total <= {16'b0, drive_delay};
+                delay_total <= {{16{drive_delay[31]}}, drive_delay};
             end
         end
     end
@@ -81,6 +85,18 @@
         end
     end
     assign sort_start = (!sort_trig_d1 && sort_trig_d0); // rising edge detect
+
+    // Compute the candidate drive start time using signed arithmetic so a
+    // negative delay_total (negative drive_delay) brings the start time
+    // earlier instead of wrapping past 64 bits and stalling in S_DRIVE_WAIT.
+    wire signed [64:0] base_signed   = delay_refer_en ? $signed({1'b0, event_peak_time})
+                                                      : $signed({1'b0, time_us});
+    wire signed [64:0] delay_signed  = $signed({{17{delay_total[47]}}, delay_total});
+    wire signed [64:0] start_calc    = base_signed + delay_signed;
+    wire signed [64:0] time_us_signed= $signed({1'b0, time_us});
+    // If the requested start is already in the past, fire on the next cycle.
+    wire [63:0]        start_clamped = (start_calc <= time_us_signed) ? time_us
+                                                                      : start_calc[63:0];
 
     always @ (posedge clk or negedge rst_n)
     begin
@@ -98,12 +114,8 @@
                     if (sort_start)
                     begin
                         drive_state <= S_DRIVE_WAIT;
-                        if (event_peak_time < time_us) begin
-                            time_drive_start <= event_peak_time + {16'd0, delay_total};
-                        end else begin
-                            time_drive_start <= time_us + {16'd0, delay_total};
-                        end
-                    end	
+                        time_drive_start <= start_clamped;
+                    end
                 end
                 S_DRIVE_WAIT:
                 begin

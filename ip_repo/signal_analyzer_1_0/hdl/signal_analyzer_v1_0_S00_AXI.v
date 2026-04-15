@@ -261,6 +261,7 @@
 	reg  analyze_en;
 	reg  sort_en;
 	reg  speed_measure_en;
+	reg  delay_refer_en;
 
 	reg  ad_data_valid_d0;
 	reg  ad_data_valid_d1;
@@ -274,6 +275,9 @@
 	wire [2:0] speed_post;
 	wire signed [31:0] dist;
 	wire [31:0]	max_time_diff;
+
+	// Delay reference channel selection (from slv_reg52[18:16])
+	wire [2:0] delay_refer_ch;
 
 	assign channel_active = pulse_active;
 	// User definitions end
@@ -1379,9 +1383,12 @@
 	wire [63:0] event_peak_time;
 	assign speed_pre = slv_reg52[2:0];
 	assign speed_post = slv_reg52[10:8];
+	assign delay_refer_ch = slv_reg52[18:16];
 	assign max_time_diff = slv_reg53[31:0]; // Maximum time difference in us between pre and post signals
 	assign dist = slv_reg54[31:0]; // Distance in um for speed measurement
-	assign event_peak_time = peak_time[speed_post];
+	// Use delay_refer_ch's peak_time as the delay reference; falls back to time_us in
+	// drive_signal_generation when delay_refer_en is low.
+	assign event_peak_time = peak_time[delay_refer_ch];
 
 	// Enable signals for the analyzer, sorting, and speed measurement
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
@@ -1395,6 +1402,7 @@
 			analyze_en <= slv_reg0[0]; // Enable signal for the analyzer
 			sort_en <= slv_reg0[1]; // Enable signal for sorting
 			speed_measure_en <= slv_reg0[2]; // Enable signal for speed measurement
+			delay_refer_en <= slv_reg0[3]; // Enable signal for sort delay reference
 			ad_data_valid_d0 <= ad_data_valid; // ADC data valid signal
 			ad_data_valid_d1 <= ad_data_valid_d0;
 		end
@@ -1486,6 +1494,8 @@
 		.speed_measure_en(speed_measure_en),
    		.measured_time_diff(time_diff[15:0]),
     	.measured_coe(delay_calcu_coe),
+
+		.delay_refer_en(delay_refer_en),
 
 		.drive_state(drive_state),
 		.drive_level(drive_level)
