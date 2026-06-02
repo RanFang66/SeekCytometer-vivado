@@ -101,32 +101,32 @@
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_zynq_ultra_ps_e_0_0/cytometer_platform_zynq_ultra_ps_e_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_zynq_ultra_ps_e_0_0"/>
-        </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axis_register_slice_0_0/cytometer_platform_axis_register_slice_0_0.xci">
           <Proxy FileSetName="cytometer_platform_axis_register_slice_0_0"/>
         </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_rst_ps8_0_199M_1/cytometer_platform_rst_ps8_0_199M_1.xci">
-          <Proxy FileSetName="cytometer_platform_rst_ps8_0_199M_1"/>
-        </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_bram_ctrl_0_0/cytometer_platform_axi_bram_ctrl_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_axi_bram_ctrl_0_0"/>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_ad_sample_0_0/cytometer_platform_ad_sample_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_ad_sample_0_0"/>
         </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_signal_analyzer_0_1/cytometer_platform_signal_analyzer_0_1.xci">
           <Proxy FileSetName="cytometer_platform_signal_analyzer_0_1"/>
         </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_blk_mem_gen_0_0/cytometer_platform_blk_mem_gen_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_blk_mem_gen_0_0"/>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_bram_ctrl_0_0/cytometer_platform_axi_bram_ctrl_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_axi_bram_ctrl_0_0"/>
         </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_axi_dma_0_0/cytometer_platform_axi_dma_0_0.xci">
           <Proxy FileSetName="cytometer_platform_axi_dma_0_0"/>
         </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_blk_mem_gen_0_0/cytometer_platform_blk_mem_gen_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_blk_mem_gen_0_0"/>
+        </CompFileExtendedInfo>
         <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_xbar_0/cytometer_platform_xbar_0.xci">
           <Proxy FileSetName="cytometer_platform_xbar_0"/>
         </CompFileExtendedInfo>
-        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_ad_sample_0_0/cytometer_platform_ad_sample_0_0.xci">
-          <Proxy FileSetName="cytometer_platform_ad_sample_0_0"/>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_rst_ps8_0_199M_1/cytometer_platform_rst_ps8_0_199M_1.xci">
+          <Proxy FileSetName="cytometer_platform_rst_ps8_0_199M_1"/>
+        </CompFileExtendedInfo>
+        <CompFileExtendedInfo CompFileName="cytometer_platform.bd" FileRelPathName="ip/cytometer_platform_zynq_ultra_ps_e_0_0/cytometer_platform_zynq_ultra_ps_e_0_0.xci">
+          <Proxy FileSetName="cytometer_platform_zynq_ultra_ps_e_0_0"/>
         </CompFileExtendedInfo>
       </File>
       <File Path="$PPRDIR/../../seek_cytometer/seek_cytometer.gen/sources_1/bd/cytometer_platform/hdl/cytometer_platform_wrapper.v">
@@ -368,9 +368,7 @@
     </Run>
     <Run Id="cytometer_platform_signal_analyzer_0_1_synth_1" Type="Ft3:Synth" SrcSet="cytometer_platform_signal_analyzer_0_1" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_synth_1">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
-          <Desc>Vivado Synthesis Defaults</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023"/>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -534,9 +532,7 @@
     </Run>
     <Run Id="cytometer_platform_signal_analyzer_0_1_impl_1" Type="Ft2:EntireDesign" Part="xczu2cg-sfvc784-1-e" ConstrsSet="cytometer_platform_signal_analyzer_0_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="cytometer_platform_signal_analyzer_0_1_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/cytometer_platform_signal_analyzer_0_1_impl_1">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
-          <Desc>Default settings for Implementation.</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023"/>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>
