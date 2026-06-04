@@ -1,3 +1,8 @@
+# Vivado 工程输出目录（由 scripts/build.tcl 重建，可随时删除）
+/build/
+# 旧版工程目录（已不再纳入版本管理，兜底忽略）
+/seek_cytometer/
+
 # Vivado 生成目录
 *.cache/
 *.gen/
