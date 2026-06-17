@@ -33,7 +33,7 @@
 		output wire [2:0] drive_state_out,
 		output wire drive_level_out,
 
-
+        // BRAM write events
 		output wire [31:0] bram_din_a,        // Data to write to BRAM
 		output wire [31:0] bram_addr_a, // Address in BRAM
 		output wire [3:0] bram_we_a,            // Write enable for BRAM
@@ -41,8 +41,14 @@
 		input  wire [31:0] bram_dout_a,       // Data read from BRAM, not used in this module
 		output wire bram_rst_a,          // Reset signal for BRAM
 		output wire bram_clk_a,          // Clock signal for BRAM
-		
-
+		// BRAM read gate configs
+        output wire [31:0] bram_din_b,        // Data to write to BRAM
+		output wire [31:0] bram_addr_b, // Address in BRAM
+		output wire [3:0] bram_we_b,            // Write enable for BRAM
+		output wire bram_en_b,            // Enable signal for BRAM
+		input  wire [31:0] bram_dout_b,       // Data read from BRAM, not used in this module
+		output wire bram_rst_b,          // Reset signal for BRAM
+		output wire bram_clk_b,          // Clock signal for BRAM
 
 		// User ports ends
 		// Do not modify the ports beyond this line
@@ -106,6 +112,13 @@
 		.bram_we_a(bram_we_internal),            // Write enable for BRAM
 		.bram_en_a(bram_en_a),            		// Enable signal for BRAM
 
+        .bram_din_b(bram_din_b),        // Data to write to BRAM
+		.bram_addr_b(bram_addr_b), // Address in BRAM
+		.bram_we_b(bram_we_b),            // Write enable for BRAM
+		.bram_en_b(bram_en_b),            // Enable signal for BRAM
+		.bram_dout_b(bram_dout_b),       // Data read from BRAM, not used in this module
+		.bram_rst_b(bram_rst_b),          // Reset signal for BRAM
+		.bram_clk_b(bram_clk_b),          // Clock signal for BRAM
 
 		.S_AXI_ACLK(s00_axi_aclk),
 		.S_AXI_ARESETN(s00_axi_aresetn),

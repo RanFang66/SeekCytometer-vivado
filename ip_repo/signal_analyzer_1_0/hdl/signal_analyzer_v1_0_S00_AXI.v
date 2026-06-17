@@ -37,6 +37,13 @@
 		output wire bram_we_a, // Write enable for BRAM
 		output wire bram_en_a, // Enable signal for BRAM
 
+        output wire [31:0] bram_din_b,        // Data to write to BRAM
+		output wire [31:0] bram_addr_b, // Address in BRAM
+		output wire [3:0] bram_we_b,            // Write enable for BRAM
+		output wire bram_en_b,            // Enable signal for BRAM
+		input  wire [31:0] bram_dout_b,       // Data read from BRAM, not used in this module
+		output wire bram_rst_b,          // Reset signal for BRAM
+		output wire bram_clk_b,          // Clock signal for BRAM
 
 		// User ports ends
 		// Do not modify the ports beyond this line
@@ -1246,20 +1253,49 @@
 		slv_reg35, slv_reg34, slv_reg33, slv_reg32, slv_reg31, slv_reg30
 	};
 
-	gate_judge_pipeline #(
+//	gate_judge_pipeline #(
+//		.C_NUM_MAX_POINTS(12),
+//		.C_POINT_DATA_WIDTH(32)
+//	) u_gate_judge (
+//		.rst_n(S_AXI_ARESETN),
+//		.sys_clk(S_AXI_ACLK),
+//		.enable(1'b1),
+//		.trigger(event_done),
+//		.point_x(sort_compare_value_x),
+//		.point_y(sort_compare_value_y),
+//		.gate_type(slv_reg17[2:0]),
+//		.gate_points_num(slv_reg17[7:4]),
+//		.gate_points_x_pack(gate_points_x_pack),
+//		.gate_points_y_pack(gate_points_y_pack),
+//		.valid(gate_valid_out),
+//		.result(gate_result_out)
+//	);
+    hierarchical_gate_wrapper #(
 		.C_NUM_MAX_POINTS(12),
 		.C_POINT_DATA_WIDTH(32)
-	) u_gate_judge (
+	) gate_wrapper (
+		.clk(S_AXI_ACLK),
 		.rst_n(S_AXI_ARESETN),
-		.sys_clk(S_AXI_ACLK),
-		.enable(1'b1),
-		.trigger(event_done),
-		.point_x(sort_compare_value_x),
-		.point_y(sort_compare_value_y),
-		.gate_type(slv_reg17[2:0]),
-		.gate_points_num(slv_reg17[7:4]),
-		.gate_points_x_pack(gate_points_x_pack),
-		.gate_points_y_pack(gate_points_y_pack),
+		
+        .bram_din(bram_din_b),
+        .bram_addr(bram_addr_b),
+        .bram_we(bram_we_b),
+        .bram_en(bram_en_b),
+        .bram_dout(bram_dout_b),
+        .bram_rst(bram_rst_b),
+        .bram_clk(bram_clk_b),
+		
+//		.enable(sort_en),
+        .enable(1'b1),
+		
+		.trigger_in(event_done),
+//        .point_x_in(sort_compare_value_x),
+//        .point_y_in(sort_compare_value_y),
+        .ch_peak_flat(ch_peak_flat),
+		.ch_width_flat(ch_width_flat),
+		.ch_area_flat(ch_area_flat),
+		
+		.bram_error(),
 		.valid(gate_valid_out),
 		.result(gate_result_out)
 	);
