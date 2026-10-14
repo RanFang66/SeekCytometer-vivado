@@ -193,7 +193,6 @@
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg52;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg53;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg54;
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg55;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg56;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg57;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg58;
@@ -248,6 +247,14 @@
 	wire [63:0] peak_time [C_AD_CHANNEL_NUM-1:0];
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_active;
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_done;
+
+	wire signed [C_AD_DATA_DEPTH-1:0] baseline_out [C_AD_CHANNEL_NUM-1:0];
+	wire [C_AD_CHANNEL_NUM-1:0] baseline_valid;
+
+	// Baseline monitor readback (slv_reg42[2:0] selects channel, slv_reg43 reads)
+	wire [2:0] mon_ch = slv_reg42[2:0];
+	wire signed [C_AD_DATA_DEPTH-1:0] baseline_mon = baseline_out[mon_ch];
+	wire baseline_valid_mon = baseline_valid[mon_ch];
 
 
 	wire signed [C_AD_CHANNEL_NUM*18-1:0] ch_peak_flat;
@@ -387,7 +394,7 @@
 	    begin
 	      slv_reg0 <= 0;
 	      slv_reg1 <= 0;
-	      slv_reg2 <= 0;
+	      slv_reg2 <= 32'h00000028; // default alpha_shift[5:2] = 10
 	      slv_reg3 <= 0;
 	      slv_reg4 <= 0;
 	      slv_reg5 <= 0;
@@ -440,7 +447,6 @@
 	      slv_reg52 <= 0;
 	      slv_reg53 <= 0;
 	      slv_reg54 <= 0;
-	      slv_reg55 <= 0;
 	      slv_reg56 <= 0;
 	      slv_reg57 <= 0;
 	      slv_reg58 <= 0;
@@ -839,13 +845,6 @@
 	                // Slave register 54
 	                slv_reg54[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
 	              end  
-	          6'h37:
-	            for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
-	              if ( S_AXI_WSTRB[byte_index] == 1 ) begin
-	                // Respective byte enables are asserted as per write strobes 
-	                // Slave register 55
-	                slv_reg55[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-	              end  
 	          6'h38:
 	            for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
 	              if ( S_AXI_WSTRB[byte_index] == 1 ) begin
@@ -958,7 +957,6 @@
 	                      slv_reg52 <= slv_reg52;
 	                      slv_reg53 <= slv_reg53;
 	                      slv_reg54 <= slv_reg54;
-	                      slv_reg55 <= slv_reg55;
 	                      slv_reg56 <= slv_reg56;
 	                      slv_reg57 <= slv_reg57;
 	                      slv_reg58 <= slv_reg58;
@@ -1118,7 +1116,7 @@
 	        6'h28   : reg_data_out <= slv_reg40;
 	        6'h29   : reg_data_out <= slv_reg41;
 	        6'h2A   : reg_data_out <= slv_reg42;
-	        6'h2B   : reg_data_out <= slv_reg43;
+	        6'h2B   : reg_data_out <= {{13{1'b0}}, baseline_valid_mon, baseline_mon}; // [18]=valid, [17:0]=baseline
 	        6'h2C   : reg_data_out <= slv_reg44;
 	        6'h2D   : reg_data_out <= slv_reg45;
 	        6'h2E   : reg_data_out <= slv_reg46;
@@ -1130,7 +1128,6 @@
 	        6'h34   : reg_data_out <= slv_reg52;
 	        6'h35   : reg_data_out <= slv_reg53;
 	        6'h36   : reg_data_out <= slv_reg54;
-	        6'h37   : reg_data_out <= slv_reg55;
 	        6'h38   : reg_data_out <= {{7{1'b0}}, wrap_around, last_written_addr[23:0]};//slv_reg56;
 	        6'h39   : reg_data_out <= event_counter;//slv_reg57;
 	        6'h3A   : reg_data_out <= slv_reg58;
@@ -1180,8 +1177,6 @@
 	wire drive_level;
 
 	reg [31:0] delay_calcu_coe;
-	reg purity_en;
-	reg [31:0] min_event_interval;
 
 	wire [31:0] time_diff;
 
@@ -1300,73 +1295,24 @@
 		.result(gate_result_out)
 	);
 
-	// Latch channel validity and gate result for sort trigger
-	reg ch_sort_valid_latched;
-	reg sort_trig_reg;
+	// Latch gate result for sort trigger
 	reg sort_ready;
-
-	// High-purity mode: track event history for interval-based suppression/abort
-	reg [63:0] current_event_time;
-	reg [63:0] last_event_time;
-	reg last_event_was_sort;
-	reg sort_abort;
-
-	wire current_event_is_sort = sort_en && gate_result_out && ch_sort_valid_latched;
-	wire [63:0] event_interval = current_event_time - last_event_time;
-	wire interval_too_close = (event_interval < {32'd0, min_event_interval});
-
-	// Purity suppress: current is sort, previous was NOT sort, interval too close
-	// Exception: if both consecutive events are sort -> always sort
-	wire purity_suppress = purity_en && !last_event_was_sort && interval_too_close;
-	
-	localparam [2:0] GATE_ALL = 3'd5;
-	wire [2:0] gate_type = slv_reg17[2:0];
 
 	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
 		if (!S_AXI_ARESETN) begin
-			ch_sort_valid_latched <= 1'b0;
-			sort_trig_reg <= 1'b0;
 			sort_ready <= 1'b0;
-			current_event_time <= 64'd0;
-			last_event_time <= 64'd0;
-			last_event_was_sort <= 1'b0;
-			sort_abort <= 1'b0;
 		end else begin
-			sort_abort <= 1'b0; // default: single-cycle pulse
-			sort_trig_reg <= 1'b0; // default: single-cycle pulse
-
 			if (event_done) begin
-				ch_sort_valid_latched <= ((ch_pulse_valid[sort_ch_x] && ch_pulse_valid[sort_ch_y]) || (gate_type == GATE_ALL));
-				current_event_time <= time_stamp_us;
 				sort_ready <= 1'b0;
 			end
 
 			if (gate_valid_out) begin
-				// Determine sort trigger with purity suppression
-				if (current_event_is_sort && !purity_suppress) begin
-					sort_trig_reg <= 1'b1;
-				end else begin
-					sort_trig_reg <= 1'b0;
-				end
-
-				// Purity abort: non-sort event too close -> abort pending drive
-				if (purity_en && !current_event_is_sort && interval_too_close) begin
-					sort_abort <= 1'b1;
-				end else begin 
-					sort_abort <= 1'b0;
-				end
-
 				sort_ready <= 1'b1;
-
-				// Update event history
-				last_event_time <= current_event_time;
-				last_event_was_sort <= current_event_is_sort;
 			end
 		end
 	end
 
-//	wire sort_trig = sort_trig_reg;
-    wire sort_trig = gate_result_out;
+	wire sort_trig = gate_result_out;
 	
 
 
@@ -1381,8 +1327,6 @@
 			drive_delay <= 32'b0; // Default drive delay
 			drive_width <= 32'd100; // Default drive width
 			cooling_time <= 32'd100; // Default cooling time
-			purity_en <= 1'b0;
-			min_event_interval <= 32'd0;
 		end else begin
 			sort_ch_x <= slv_reg16[2:0]; // Channel number for X axis sorting
 			sort_x_type <= slv_reg16[9:8]; // Type of sorting for X axis
@@ -1390,12 +1334,10 @@
 			sort_y_type <= slv_reg16[25:24]; // Type of sorting for Y axis
 
 			drive_type <= slv_reg48[0]; // Drive type: 0 for level, 1 for edge
-			purity_en <= slv_reg48[1]; // High-purity mode enable
 			drive_delay <= slv_reg49; // Drive delay in micro
 			drive_width <= slv_reg50; // Drive width in microseconds
 			cooling_time <= slv_reg51; // Cooling time in microseconds
 			delay_calcu_coe <= slv_reg47;
-			min_event_interval <= slv_reg55; // Min interval between events for purity mode (us)
 		end
 	end
 
@@ -1459,6 +1401,7 @@
 			.sample_in(ad_data_array[i]),
 			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
+			.baseline_out(baseline_out[i]),
 			.event_done(event_done),
 			.pulse_active(pulse_active[i]),
 			.pulse_done(pulse_done[i]),
@@ -1466,6 +1409,27 @@
 			.peak_out(pulse_peak[i]),
 			.area_out(pulse_area[i]),
 			.peak_time_out(peak_time[i])
+	    );
+	  end
+	endgenerate
+
+	// Baseline estimators (one per channel)
+	genvar j;
+	generate
+	  for (j = 0; j < C_AD_CHANNEL_NUM; j = j + 1) begin : BASELINE_ESTIMATORS
+	    baseline_estimator #(
+	      .C_AD_DATA_DEPTH(C_AD_DATA_DEPTH)
+		) baseline_estimator_inst (
+			.clk(S_AXI_ACLK),
+			.rst_n(S_AXI_ARESETN),
+			.sample_valid(ad_data_updated),
+			.sample_in(ad_data_array[j]),
+			.pulse_active(1'b0),                        // phase 1: ungated; switch to pulse_active[j] in phase 2
+			.acquire_force(slv_reg2[1]),
+			.alpha_shift({1'b0, slv_reg2[5:2]}),
+			.slope_th({2'b0, slv_reg2[13:8]}),
+			.baseline_valid(baseline_valid[j]),
+			.baseline_out(baseline_out[j])
 	    );
 	  end
 	endgenerate
@@ -1519,7 +1483,6 @@
 		.rst_n(S_AXI_ARESETN),
 		.sort_en(sort_en),
 		.sort_trig(sort_trig),
-		.sort_abort(sort_abort),
 		.drive_type(drive_type),
 		.time_us(time_stamp_us),
 		.event_peak_time(event_peak_time),

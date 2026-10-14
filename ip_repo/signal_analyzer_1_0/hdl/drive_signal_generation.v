@@ -7,8 +7,6 @@
     input wire sort_en,
     (*MARK_DEBUG="true"*)
     input wire sort_trig,
-    (*MARK_DEBUG="true"*)
-    input wire sort_abort,  // High-purity mode: abort pending sort in S_DRIVE_WAIT
     input wire drive_type,  // 0: Level, 1: Edge
     (*MARK_DEBUG="true"*)
     input wire [63:0] time_us,
@@ -119,10 +117,7 @@
                 end
                 S_DRIVE_WAIT:
                 begin
-                    if (sort_abort) begin
-                        // High-purity mode: abort sort if non-sort event too close
-                        drive_state <= S_DRIVE_IDLE;
-                    end else if (time_us >= time_drive_start) begin
+                    if (time_us >= time_drive_start) begin
                         drive_state <= S_DRIVE_HIGH;
                         time_drive_end <= drive_type ? (time_us + 64'd10) : (time_us + {32'd0, drive_width});
                         drive_level_edge <= ~drive_level_edge;

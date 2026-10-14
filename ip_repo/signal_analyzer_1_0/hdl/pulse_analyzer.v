@@ -11,6 +11,7 @@ module pulse_analyzer #(
   input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,
   input  wire                          enabled,
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
+  input  wire signed [C_AD_DATA_DEPTH-1:0] baseline_out, // per-channel baseline (integer), metric-level correction
   input  wire                          event_done,     // event boundary: clear outputs if no pulse in this event
   output reg                           pulse_active,   // high while in pulse
   output reg                           pulse_done,     // one clock pulse at pulse end
@@ -111,9 +112,11 @@ module pulse_analyzer #(
             pulse_active <= 1'b0;
             pulse_done   <= 1'b1;
             pulse_occurred <= 1'b1;
-            peak_out     <= peak_reg;
+            // Metric-level baseline correction at pulse end: subtract baseline
+            // from raw peak/area. Detection threshold stays absolute (phase 1).
+            peak_out     <= peak_reg - baseline_out;
             width_out    <= width_reg;
-            area_out     <= area_reg;
+            area_out     <= area_reg - baseline_out * $signed({1'b0, width_reg});
             peak_time_out <= peak_time_reg;
             // Reset working regs
             peak_reg     <= {C_AD_DATA_DEPTH{1'b0}};
