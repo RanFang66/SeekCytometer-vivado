@@ -1365,8 +1365,8 @@
 		end
 	end
 
-	wire sort_trig = sort_trig_reg;
-
+//	wire sort_trig = sort_trig_reg;
+    wire sort_trig = gate_result_out;
 	
 
 

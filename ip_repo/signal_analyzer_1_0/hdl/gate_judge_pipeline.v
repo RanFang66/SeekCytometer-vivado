@@ -48,7 +48,8 @@ module gate_judge_pipeline #(
                      GT_RECTANGLE = 3'd2,
                      GT_POLYGON   = 3'd3,
                      GT_ELLIPSE   = 3'd4,
-                     GT_ALL       = 3'd5;
+                     GT_QUADRANT  = 3'd5,
+                     GT_ALL       = 3'd6;
 
     // FSM states
     localparam [1:0] S_IDLE = 2'd0,
