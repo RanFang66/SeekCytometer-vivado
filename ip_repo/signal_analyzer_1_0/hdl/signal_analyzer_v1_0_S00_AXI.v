@@ -1402,6 +1402,7 @@
 			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
 			.baseline_out(baseline_out[i]),
+			.baseline_valid(baseline_valid[i]),
 			.event_done(event_done),
 			.pulse_active(pulse_active[i]),
 			.pulse_done(pulse_done[i]),
@@ -1424,7 +1425,7 @@
 			.rst_n(S_AXI_ARESETN),
 			.sample_valid(ad_data_updated),
 			.sample_in(ad_data_array[j]),
-			.pulse_active(1'b0),                        // phase 1: ungated; switch to pulse_active[j] in phase 2
+			.pulse_active(pulse_active[j]),                        // phase 2: freeze baseline during pulse
 			.acquire_force(slv_reg2[1]),
 			.alpha_shift({1'b0, slv_reg2[5:2]}),
 			.slope_th({2'b0, slv_reg2[13:8]}),

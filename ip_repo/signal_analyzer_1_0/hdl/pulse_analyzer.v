@@ -12,6 +12,7 @@ module pulse_analyzer #(
   input  wire                          enabled,
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
   input  wire signed [C_AD_DATA_DEPTH-1:0] baseline_out, // per-channel baseline (integer), metric-level correction
+  input  wire                          baseline_valid,  // 1 = baseline trusted, switch to relative threshold
   input  wire                          event_done,     // event boundary: clear outputs if no pulse in this event
   output reg                           pulse_active,   // high while in pulse
   output reg                           pulse_done,     // one clock pulse at pulse end
@@ -22,6 +23,11 @@ module pulse_analyzer #(
 );
 
 
+
+  // Relative detection reference: when baseline is trusted, trigger against
+  // (baseline + threshold); otherwise fall back to the absolute threshold.
+  wire signed [C_AD_DATA_DEPTH-1:0] detect_ref =
+      baseline_valid ? (baseline_out + threshold_value) : threshold_value;
 
   // Internal regs
   reg signed [C_AD_DATA_DEPTH-1:0] peak_reg;
@@ -70,7 +76,7 @@ module pulse_analyzer #(
       if (sample_valid && enabled) begin
         if (!in_pulse) begin
           // Not in pulse check for rising above threshold with debounce
-          if (sample_in > threshold_value) begin
+          if (sample_in > detect_ref) begin
             if (rise_count < C_DEBOUNCE_LEN)
               rise_count <= rise_count + 1;
           end else begin
@@ -99,7 +105,7 @@ module pulse_analyzer #(
           area_reg <= area_reg + $signed({{(C_AREA_WIDTH-C_AD_DATA_DEPTH){sample_in[C_AD_DATA_DEPTH-1]}}, sample_in});
 
           // Falling below/equal threshold
-          if (sample_in <= threshold_value) begin
+          if (sample_in <= detect_ref) begin
             if (fall_count < C_DEBOUNCE_LEN)
               fall_count <= fall_count + 1;
           end else begin
@@ -113,7 +119,7 @@ module pulse_analyzer #(
             pulse_done   <= 1'b1;
             pulse_occurred <= 1'b1;
             // Metric-level baseline correction at pulse end: subtract baseline
-            // from raw peak/area. Detection threshold stays absolute (phase 1).
+            // from raw peak/area. Detection now uses relative threshold (phase 2).
             peak_out     <= peak_reg - baseline_out;
             width_out    <= width_reg;
             area_out     <= area_reg - baseline_out * $signed({1'b0, width_reg});
