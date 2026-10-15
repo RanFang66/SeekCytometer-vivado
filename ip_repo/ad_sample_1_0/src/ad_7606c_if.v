@@ -160,14 +160,14 @@ function [15:0] cfgw_word(input [2:0] idx);
             3'd0: cfgw_word = {1'b1, 7'h01, 8'h00};
             3'd1: cfgw_word = {1'b1, 7'h01, 8'h00}; // read twice to improve stability
             // ---- Register writes ----
-            // 0x03: CH1_CH2 Range, 0x11 = both ±5V single-ended
-            3'd2: cfgw_word = {1'b0, 7'h03, 8'h11};
-            // 0x04: CH3_CH4 Range
-            3'd3: cfgw_word = {1'b0, 7'h04, 8'h11};
-            // 0x05: CH5_CH6 Range
-            3'd4: cfgw_word = {1'b0, 7'h05, 8'h11};
-            // 0x06: CH7_CH8 Range
-            3'd5: cfgw_word = {1'b0, 7'h06, 8'h11};
+            // 0x03: CH1_CH2 Range, 0x88 = both ±5V differential
+            3'd2: cfgw_word = {1'b0, 7'h03, 8'h88};
+            // 0x04: CH3_CH4 Range, 0x88 = both ±5V differential
+            3'd3: cfgw_word = {1'b0, 7'h04, 8'h88};
+            // 0x05: CH5_CH6 Range, 0x88 = both ±5V differential
+            3'd4: cfgw_word = {1'b0, 7'h05, 8'h88};
+            // 0x06: CH7_CH8 Range, 0x88 = both ±5V differential
+            3'd5: cfgw_word = {1'b0, 7'h06, 8'h88};
             // 0x07: Bandwidth = 0xFF (all channels high bandwidth)
             3'd6: cfgw_word = {1'b0, 7'h07, 8'hFF};
             // ---- Exit REGISTER MODE: WR cycle with all DBx = 0 ----
