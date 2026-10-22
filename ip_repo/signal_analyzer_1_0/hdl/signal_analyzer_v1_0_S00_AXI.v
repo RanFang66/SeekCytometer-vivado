@@ -181,7 +181,6 @@
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg40;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg41;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg42;
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg43;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg44;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg45;
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg46;
@@ -250,6 +249,11 @@
 
 	wire signed [C_AD_DATA_DEPTH-1:0] baseline_out [C_AD_CHANNEL_NUM-1:0];
 	wire [C_AD_CHANNEL_NUM-1:0] baseline_valid;
+
+	// Baseline correction enable (slv_reg2[0]). When 0, pulse_analyzer falls back
+	// to absolute threshold + raw metrics (effective baseline forced 0 / valid 0).
+	// The estimator keeps running in background so re-enabling is glitch-free.
+	wire baseline_en = slv_reg2[0];
 
 	// Baseline monitor readback (slv_reg42[2:0] selects channel, slv_reg43 reads)
 	wire [2:0] mon_ch = slv_reg42[2:0];
@@ -395,7 +399,7 @@
 	      slv_reg0 <= 0;
 	      slv_reg1 <= 0;
 	      slv_reg2 <= 32'h00000028; // default alpha_shift[5:2] = 10
-	      slv_reg3 <= 0;
+	      slv_reg3 <= 32'hFF080400; // default: max_pulse_wid=255, guard_len=8, acquire_len=1024
 	      slv_reg4 <= 0;
 	      slv_reg5 <= 0;
 	      slv_reg6 <= 0;
@@ -435,7 +439,6 @@
 	      slv_reg40 <= 0;
 	      slv_reg41 <= 0;
 	      slv_reg42 <= 0;
-	      slv_reg43 <= 0;
 	      slv_reg44 <= 0;
 	      slv_reg45 <= 0;
 	      slv_reg46 <= 0;
@@ -766,7 +769,7 @@
 	              if ( S_AXI_WSTRB[byte_index] == 1 ) begin
 	                // Respective byte enables are asserted as per write strobes 
 	                // Slave register 43
-	                slv_reg43[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+	                // slv_reg43 is read-only (baseline monitor); writes ignored
 	              end  
 	          6'h2C:
 	            for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
@@ -945,7 +948,6 @@
 	                      slv_reg40 <= slv_reg40;
 	                      slv_reg41 <= slv_reg41;
 	                      slv_reg42 <= slv_reg42;
-	                      slv_reg43 <= slv_reg43;
 	                      slv_reg44 <= slv_reg44;
 	                      slv_reg45 <= slv_reg45;
 	                      slv_reg46 <= slv_reg46;
@@ -1401,8 +1403,8 @@
 			.sample_in(ad_data_array[i]),
 			.enabled((enabled_channels[i] | (speed_pre == i) | (speed_post == i)) & analyze_en),
 			.threshold_value(threshold_value[i]),
-			.baseline_out(baseline_out[i]),
-			.baseline_valid(baseline_valid[i]),
+			.baseline_out(baseline_en ? baseline_out[i] : {C_AD_DATA_DEPTH{1'b0}}),
+			.baseline_valid(baseline_en & baseline_valid[i]),
 			.event_done(event_done),
 			.pulse_active(pulse_active[i]),
 			.pulse_done(pulse_done[i]),
@@ -1429,6 +1431,9 @@
 			.acquire_force(slv_reg2[1]),
 			.alpha_shift({1'b0, slv_reg2[5:2]}),
 			.slope_th({2'b0, slv_reg2[13:8]}),
+			.acquire_len(slv_reg3[15:0]),
+			.guard_len(slv_reg3[23:16]),
+			.max_pulse_wid(slv_reg3[31:24]),
 			.baseline_valid(baseline_valid[j]),
 			.baseline_out(baseline_out[j])
 	    );

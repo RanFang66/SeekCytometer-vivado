@@ -5,7 +5,7 @@
 // Per-channel signal baseline estimator (leaky integrator / EMA).
 //
 // Two-phase state machine:
-//   S_ACQUIRE : open-loop fast EMA (shift = ACQ_SHIFT = 4) for C_ACQUIRE_LEN
+//   S_ACQUIRE : open-loop fast EMA (shift = ACQ_SHIFT = 4) for acquire_len
 //               samples, then assert baseline_valid and enter S_TRACK.
 //   S_TRACK   : closed-loop slow EMA (shift = alpha_shift), gated by
 //               (!pulse_active) & settle(guard) & slope secondary gate.
@@ -19,10 +19,7 @@
 // ----------------------------------------------------------------------------
 module baseline_estimator #(
     parameter integer C_AD_DATA_DEPTH = 18,
-    parameter integer C_FRAC_BITS     = 6,
-    parameter integer C_ACQUIRE_LEN   = 1024,
-    parameter integer C_GUARD_LEN     = 8,
-    parameter integer C_MAX_PULSE_WID = 255
+    parameter integer C_FRAC_BITS     = 6
 )(
     input  wire                              clk,
     input  wire                              rst_n,
@@ -32,6 +29,9 @@ module baseline_estimator #(
     input  wire                              acquire_force,  // PS: force re-acquire
     input  wire [4:0]                        alpha_shift,    // slow-track shift K (alpha = 2^-K)
     input  wire signed [7:0]                 slope_th,       // slope secondary gate; <=0 disables
+    input  wire [15:0]                       acquire_len,    // runtime: open-loop acquire sample count N
+    input  wire [7:0]                        guard_len,      // runtime: settle guard count after falling edge
+    input  wire [7:0]                        max_pulse_wid,  // runtime: watchdog threshold (samples)
     (*MARK_DEBUG="true"*) output reg         baseline_valid, // 1 = baseline trusted
     (*MARK_DEBUG="true"*) output wire signed [C_AD_DATA_DEPTH-1:0] baseline_out,    // integer baseline
     output wire signed [C_AD_DATA_DEPTH-1:0] sample_baselined   // sample - baseline
@@ -46,9 +46,9 @@ module baseline_estimator #(
 
     (*MARK_DEBUG="true"*) reg [0:0] state;
     (*MARK_DEBUG="true"*) reg signed [C_BASELINE_WIDTH-1:0] baseline;      // Q18.6
-    reg [$clog2(C_ACQUIRE_LEN+1)-1:0]   acq_cnt;
-    reg [$clog2(C_GUARD_LEN+1)-1:0]     guard_cnt;
-    reg [$clog2(C_MAX_PULSE_WID+1)-1:0] wid_cnt;
+    reg [15:0] acq_cnt;    // sized to runtime acquire_len (16-bit)
+    reg [7:0]  guard_cnt;  // sized to runtime guard_len (8-bit)
+    reg [7:0]  wid_cnt;    // sized to runtime max_pulse_wid (8-bit)
     reg signed [C_AD_DATA_DEPTH-1:0]    sample_prev;
     reg                                 first_sample;
     reg                                 pulse_active_d1;
@@ -78,6 +78,10 @@ module baseline_estimator #(
     wire signed [C_BASELINE_WIDTH:0] next_baseline =
         {baseline[C_BASELINE_WIDTH-1], baseline} + (err >>> ema_shift);
 
+    // Guard acquire_len == 0: acquire_len-1 would wrap (0xFFFF) and the ACQUIRE
+    // termination compare would never match, hanging the estimator in ACQUIRE.
+    wire [15:0] acquire_len_eff = (acquire_len == 16'd0) ? 16'd1 : acquire_len;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state          <= S_ACQUIRE;
@@ -95,7 +99,7 @@ module baseline_estimator #(
             if (sample_valid) begin
                 // Watchdog: count consecutive pulse-active samples.
                 if (pulse_active) begin
-                    if (wid_cnt < C_MAX_PULSE_WID)
+                    if (wid_cnt < max_pulse_wid)
                         wid_cnt <= wid_cnt + 1;
                 end else begin
                     wid_cnt <= 0;
@@ -103,7 +107,7 @@ module baseline_estimator #(
 
                 // Settle guard: reload on pulse falling edge, else count down.
                 if (pulse_fall)
-                    guard_cnt <= C_GUARD_LEN;
+                    guard_cnt <= guard_len;
                 else if (guard_cnt > 0)
                     guard_cnt <= guard_cnt - 1;
 
@@ -118,7 +122,7 @@ module baseline_estimator #(
                     case (state)
                         S_ACQUIRE: begin
                             baseline <= next_baseline[C_BASELINE_WIDTH-1:0];
-                            if (acq_cnt == C_ACQUIRE_LEN - 1) begin
+                            if (acq_cnt == acquire_len_eff - 1) begin
                                 state          <= S_TRACK;
                                 baseline_valid <= 1'b1;
                                 acq_cnt        <= 0;
@@ -129,7 +133,7 @@ module baseline_estimator #(
                         S_TRACK: begin
                             if (in_baseline)
                                 baseline <= next_baseline[C_BASELINE_WIDTH-1:0];
-                            if (acquire_force || (wid_cnt >= C_MAX_PULSE_WID)) begin
+                            if (acquire_force || (wid_cnt >= max_pulse_wid)) begin
                                 state          <= S_ACQUIRE;
                                 baseline_valid <= 1'b0;
                                 acq_cnt        <= 0;
