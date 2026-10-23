@@ -31,7 +31,7 @@ module baseline_estimator #(
     input  wire signed [7:0]                 slope_th,       // slope secondary gate; <=0 disables
     input  wire [15:0]                       acquire_len,    // runtime: open-loop acquire sample count N
     input  wire [7:0]                        guard_len,      // runtime: settle guard count after falling edge
-    input  wire [7:0]                        max_pulse_wid,  // runtime: watchdog threshold (samples)
+    input  wire [15:0]                       max_pulse_wid,  // runtime: watchdog threshold (samples)
     (*MARK_DEBUG="true"*) output reg         baseline_valid, // 1 = baseline trusted
     (*MARK_DEBUG="true"*) output wire signed [C_AD_DATA_DEPTH-1:0] baseline_out,    // integer baseline
     output wire signed [C_AD_DATA_DEPTH-1:0] sample_baselined   // sample - baseline
@@ -48,7 +48,7 @@ module baseline_estimator #(
     (*MARK_DEBUG="true"*) reg signed [C_BASELINE_WIDTH-1:0] baseline;      // Q18.6
     reg [15:0] acq_cnt;    // sized to runtime acquire_len (16-bit)
     reg [7:0]  guard_cnt;  // sized to runtime guard_len (8-bit)
-    reg [7:0]  wid_cnt;    // sized to runtime max_pulse_wid (8-bit)
+    reg [15:0] wid_cnt;    // sized to runtime max_pulse_wid (16-bit)
     reg signed [C_AD_DATA_DEPTH-1:0]    sample_prev;
     reg                                 first_sample;
     reg                                 pulse_active_d1;
@@ -61,8 +61,10 @@ module baseline_estimator #(
         {sample_fp[C_BASELINE_WIDTH-1], sample_fp} -
         {baseline[C_BASELINE_WIDTH-1], baseline};
 
-    // EMA shift: fast in ACQUIRE, slow (alpha_shift) in TRACK.
-    wire [4:0] ema_shift = (state == S_ACQUIRE) ? ACQ_SHIFT : alpha_shift;
+    // EMA shift: fast in ACQUIRE, slow (alpha_shift) in TRACK. Clamp to 24 so the
+    // shift never exceeds the 25-bit err width (avoids >>> sign-fill for alpha_shift
+    // >= 25; alpha >= 24 is already "hold forever" at 1 MHz).
+    wire [4:0] ema_shift = (state == S_ACQUIRE) ? ACQ_SHIFT : ((alpha_shift > 5'd24) ? 5'd24 : alpha_shift);
 
     // Slope secondary gate (disabled when slope_th <= 0).
     wire signed [C_AD_DATA_DEPTH-1:0] sample_delta = sample_in - sample_prev;

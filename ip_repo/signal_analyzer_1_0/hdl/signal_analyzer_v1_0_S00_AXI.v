@@ -399,8 +399,8 @@
 	      slv_reg0 <= 0;
 	      slv_reg1 <= 0;
 	      slv_reg2 <= 32'h00000028; // default alpha_shift[5:2] = 10
-	      slv_reg3 <= 32'hFF080400; // default: max_pulse_wid=255, guard_len=8, acquire_len=1024
-	      slv_reg4 <= 0;
+	      slv_reg3 <= 32'h00080400; // default: guard_len=8, acquire_len=1024
+	      slv_reg4 <= 32'd255; // default: max_pulse_wid=255
 	      slv_reg5 <= 0;
 	      slv_reg6 <= 0;
 	      slv_reg7 <= 0;
@@ -1429,11 +1429,11 @@
 			.sample_in(ad_data_array[j]),
 			.pulse_active(pulse_active[j]),                        // phase 2: freeze baseline during pulse
 			.acquire_force(slv_reg2[1]),
-			.alpha_shift({1'b0, slv_reg2[5:2]}),
+			.alpha_shift(slv_reg2[6:2]),
 			.slope_th({2'b0, slv_reg2[13:8]}),
 			.acquire_len(slv_reg3[15:0]),
 			.guard_len(slv_reg3[23:16]),
-			.max_pulse_wid(slv_reg3[31:24]),
+			.max_pulse_wid(slv_reg4[15:0]),
 			.baseline_valid(baseline_valid[j]),
 			.baseline_out(baseline_out[j])
 	    );
