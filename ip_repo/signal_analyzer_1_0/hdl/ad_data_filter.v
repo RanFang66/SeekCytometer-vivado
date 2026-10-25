@@ -73,10 +73,15 @@ always @(posedge clk or negedge rst_n) begin
             ad_ch_val_dly1[ch] <= ad_ch_val_dly0[ch];
             ad_ch_val_dly0[ch] <= ad_ch_val[ch];
 
-            sum[ch] <= ad_ch_val_dly0[ch]
-                     + ad_ch_val_dly1[ch]
-                     + ad_ch_val_dly2[ch]
-                     + ad_ch_val[ch];
+            // Sign-extend each 18-bit operand to SUM_WIDTH (20-bit) *before*
+            // summing. Without this, Verilog evaluates each intermediate `+`
+            // at the operand width (18-bit), so four samples near +1.5V
+            // (4 * ~40000 = 160000 > 2^17-1 = 131071) wrap negative and the
+            // filtered value (hence the baseline) jumps wildly.
+            sum[ch] <= $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val_dly0[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val_dly0[ch] })
+                     + $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val_dly1[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val_dly1[ch] })
+                     + $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val_dly2[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val_dly2[ch] })
+                     + $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val[ch] });
 
             ad_ch_val_filt_arr[ch] <= (sum[ch]) >>> 2;
         end
