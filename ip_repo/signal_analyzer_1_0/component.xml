@@ -410,7 +410,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>6b05b770</spirit:value>
+            <spirit:value>8704195d</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -426,7 +426,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>6b05b770</spirit:value>
+            <spirit:value>8704195d</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -1294,6 +1294,11 @@
         <spirit:userFileType>CHECKSUM_e0f52da8</spirit:userFileType>
       </spirit:file>
       <spirit:file>
+        <spirit:name>hdl/baseline_estimator.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+        <spirit:userFileType>CHECKSUM_89e43df9</spirit:userFileType>
+      </spirit:file>
+      <spirit:file>
         <spirit:name>hdl/signal_analyzer_v1_0.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
         <spirit:userFileType>CHECKSUM_61a00c99</spirit:userFileType>
@@ -1331,6 +1336,10 @@
       </spirit:file>
       <spirit:file>
         <spirit:name>hdl/hierarchical_gate_wrapper.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+      </spirit:file>
+      <spirit:file>
+        <spirit:name>hdl/baseline_estimator.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
@@ -1431,14 +1440,14 @@
         <xilinx:taxonomy>AXI_Peripheral</xilinx:taxonomy>
       </xilinx:taxonomies>
       <xilinx:displayName>signal_analyzer_v1.0</xilinx:displayName>
-      <xilinx:coreRevision>81</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-08-20T03:20:32Z</xilinx:coreCreationDateTime>
+      <xilinx:coreRevision>83</xilinx:coreRevision>
+      <xilinx:coreCreationDateTime>2026-10-23T07:18:43Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2023.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="2d137e97"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="ed1368d5"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="0f09a859"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="867a5cbf"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="2c4c3246"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="5b38756d"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="0f81f8be"/>

@@ -51,9 +51,9 @@ module hierarchical_gate_wrapper #(
 //    input wire signed [C_POINT_DATA_WIDTH-1:0] point_y_in,
     
     // 最终结果输出
-    (*MARK_DEBUG="true"*) output wire  bram_error,  // 因读取门信息失败而中止
-    (*MARK_DEBUG="true"*) output reg valid,  // 代表计算完成
-    (*MARK_DEBUG="true"*) output reg result   // 在没有下一个输入点时代表上一个点的结果
+    output wire  bram_error,  // 因读取门信息失败而中止
+    output reg valid,  // 代表计算完成
+    output reg result   // 在没有下一个输入点时代表上一个点的结果
     );
     localparam LENGTH_GATE_INFO    = 4 * 28;
     
@@ -61,12 +61,12 @@ module hierarchical_gate_wrapper #(
     localparam ST_READY  = 2'd1;
     localparam ST_CONFIG = 2'd2;
     localparam ST_COMPUTE  = 2'd3;
-    (*MARK_DEBUG="true"*)  reg [1:0] state;
+    reg [1:0] state;
     reg trigger_dly;
     reg trigger_bram_read;
     reg [31:0] bram_gate_addr;
-    (*MARK_DEBUG="true"*) wire trigger_input = trigger_in & ~trigger_dly;
-    (*MARK_DEBUG="true"*) wire bram_read_busy;
+    wire trigger_input = trigger_in & ~trigger_dly;
+    wire bram_read_busy;
     wire [7:0] bram_gate_type;
     wire [15:0] bram_gate_param;
     wire [32 * C_NUM_MAX_POINTS - 1:0] bram_gate_points_x;
@@ -76,35 +76,35 @@ module hierarchical_gate_wrapper #(
     wire [C_POINT_DATA_WIDTH * C_NUM_MAX_POINTS - 1:0] gate_points_y;
     
     // 测试点
-    (*MARK_DEBUG="true"*) reg  trigger_gate_judge;
+    reg  trigger_gate_judge;
 //    reg [C_POINT_DATA_WIDTH-1:0] point_x;
 //    reg [C_POINT_DATA_WIDTH-1:0] point_y;
-    (*MARK_DEBUG="true"*) wire signed [31:0] sort_compare_value_x;
-	(*MARK_DEBUG="true"*) wire signed [31:0] sort_compare_value_y;
+    wire signed [31:0] sort_compare_value_x;
+	wire signed [31:0] sort_compare_value_y;
  
     // 门控参数输出
-    (*MARK_DEBUG="true"*) reg [2:0]  gate_type;
-    (*MARK_DEBUG="true"*) reg [$clog2(C_NUM_MAX_POINTS)-1:0] gate_points_num;
-    (*MARK_DEBUG="true"*) reg [C_POINT_DATA_WIDTH * C_NUM_MAX_POINTS - 1:0] gate_points_x_pack;
-    (*MARK_DEBUG="true"*) reg [C_POINT_DATA_WIDTH * C_NUM_MAX_POINTS - 1:0] gate_points_y_pack;
+    reg [2:0]  gate_type;
+    reg [$clog2(C_NUM_MAX_POINTS)-1:0] gate_points_num;
+    reg [C_POINT_DATA_WIDTH * C_NUM_MAX_POINTS - 1:0] gate_points_x_pack;
+    reg [C_POINT_DATA_WIDTH * C_NUM_MAX_POINTS - 1:0] gate_points_y_pack;
     
     // 单门控输出反馈
-    (*MARK_DEBUG="true"*) wire gate_valid;
-    (*MARK_DEBUG="true"*) wire gate_result;
+    wire gate_valid;
+    wire gate_result;
     
-    (*MARK_DEBUG="true"*) wire bram_info_last;
-    (*MARK_DEBUG="true"*) reg bram_info_last_reg;
+    wire bram_info_last;
+    reg bram_info_last_reg;
     
     wire [2:0] channelX;
     wire [2:0] channelY;
     wire [1:0] typeX;
     wire [1:0] typeY;
-    (*MARK_DEBUG="true"*) reg [2:0] reg_channelX;
-    (*MARK_DEBUG="true"*) reg [2:0] reg_channelY;
-    (*MARK_DEBUG="true"*) reg [1:0] reg_typeX;
-    (*MARK_DEBUG="true"*) reg [1:0] reg_typeY;
+    reg [2:0] reg_channelX;
+    reg [2:0] reg_channelY;
+    reg [1:0] reg_typeX;
+    reg [1:0] reg_typeY;
     
-    (*MARK_DEBUG="true"*) reg signed [C_PEAK_BITS * NUM_CH-1:0] ch_peaks;
+    reg signed [C_PEAK_BITS * NUM_CH-1:0] ch_peaks;
     reg [C_WIDTH_BITS * NUM_CH-1:0]       ch_widths;
     reg signed [C_AREA_BITS * NUM_CH-1:0] ch_areas;
     
