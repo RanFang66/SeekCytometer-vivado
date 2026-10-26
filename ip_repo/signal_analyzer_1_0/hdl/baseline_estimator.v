@@ -24,7 +24,7 @@ module baseline_estimator #(
     input  wire                              clk,
     input  wire                              rst_n,
     input  wire                              sample_valid,   // filtered sample update edge
-    input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,      // filtered sample
+    (*MARK_DEBUG="true"*) input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,      // filtered sample
     input  wire                              pulse_active,   // from pulse_analyzer (registered, 1 clk late)
     input  wire                              acquire_force,  // PS: force re-acquire
     input  wire [4:0]                        alpha_shift,    // slow-track shift K (alpha = 2^-K)
@@ -61,6 +61,14 @@ module baseline_estimator #(
         {sample_fp[C_BASELINE_WIDTH-1], sample_fp} -
         {baseline[C_BASELINE_WIDTH-1], baseline};
 
+    // Pipeline stage 1: registered error. The EMA feedback path is
+    //   baseline -> subtract(err) -> barrel-shift -> add -> baseline
+    // which, at 199 MHz with a 5-level barrel shifter, is a timing hazard: a
+    // not-yet-settled value can be latched and make the baseline "jump" even
+    // though the raw waveform is stable. Latching err splits the path into
+    // (subtract) and (barrel-shift + add) so each stage closes timing easily.
+    (*MARK_DEBUG="true"*) reg signed [C_BASELINE_WIDTH:0] err_reg;
+
     // EMA shift: fast in ACQUIRE, slow (alpha_shift) in TRACK. Clamp to 24 so the
     // shift never exceeds the 25-bit err width (avoids >>> sign-fill for alpha_shift
     // >= 25; alpha >= 24 is already "hold forever" at 1 MHz).
@@ -77,8 +85,9 @@ module baseline_estimator #(
     wire in_baseline = !pulse_active && (guard_cnt == 0) && slope_ok;
 
     // Candidate next baseline (kept 25-bit signed to avoid overflow on add).
+    // Uses the registered error so the subtract is off the critical path.
     wire signed [C_BASELINE_WIDTH:0] next_baseline =
-        {baseline[C_BASELINE_WIDTH-1], baseline} + (err >>> ema_shift);
+        {baseline[C_BASELINE_WIDTH-1], baseline} + (err_reg >>> ema_shift);
 
     // Guard acquire_len == 0: acquire_len-1 would wrap (0xFFFF) and the ACQUIRE
     // termination compare would never match, hanging the estimator in ACQUIRE.
@@ -95,6 +104,7 @@ module baseline_estimator #(
             sample_prev    <= {C_AD_DATA_DEPTH{1'b0}};
             first_sample   <= 1'b1;
             pulse_active_d1 <= 1'b0;
+            err_reg        <= {(C_BASELINE_WIDTH+1){1'b0}};
         end else begin
             pulse_active_d1 <= pulse_active;
 
@@ -115,9 +125,16 @@ module baseline_estimator #(
 
                 sample_prev <= sample_in;
 
+                // Pipeline stage 1: latch the error for the current sample vs the
+                // current baseline. The EMA update below consumes the *previous*
+                // sample's error (err_reg), so the subtract and the shift+add are
+                // separated by one register stage.
+                err_reg <= err;
+
                 if (first_sample) begin
                     // Seed with the first sample to speed up convergence.
                     baseline     <= sample_fp;
+                    err_reg      <= {(C_BASELINE_WIDTH+1){1'b0}}; // no spurious EMA step after seeding
                     first_sample <= 1'b0;
                     acq_cnt      <= 0;
                 end else begin

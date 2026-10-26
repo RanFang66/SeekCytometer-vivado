@@ -3,7 +3,7 @@
 > 日期：2026-10-25
 > 分支：`refactor/baseline`（Vivado `0c09099`、Vitis `bd02304`、Desktop `develop@b93090b`）
 > 关联文档：《信号基线自动识别与基线校正设计方案》《信号基线开发记录小结》
-> 验证对象：阶段3 + 阶段4 已实现功能 —— ACQUIRE/TRACK 基线估计、相对阈值、`baseline_en` 门控、运行时参数、寄存器回读、UDP 命令映射（HMI 基线调试台），以及本次的**滤波器求和溢出修复**
+> 验证对象：阶段3 + 阶段4 已实现功能 —— ACQUIRE/TRACK 基线估计、相对阈值、`baseline_en` 门控、运行时参数、寄存器回读、UDP 命令映射（HMI 基线调试台），以及**滤波器求和溢出修复 + 基线估计器流水线化（时序）修复**
 
 ---
 
@@ -11,12 +11,13 @@
 
 | # | 修改项 | 位置 | 说明 |
 |---|---|---|---|
-| 1 | **滤波器求和溢出修复（根因）** | `ad_data_filter.v` | 4 个 18-bit 样本求和未显式符号扩展到 20-bit，当输入 > 32768 码（悬空 ~1.5V）时中间结果回绕为负数 → 滤波输出错误 → 基线跳变。修复：求和前逐操作数 `$signed` 符号扩展 |
+| 1 | 滤波器求和溢出修复（防御性，非根因） | `ad_data_filter.v` | 4 个 18-bit 样本求和未显式符号扩展到 20-bit。悬空 ~1.5V 时中间结果可能回绕 → 滤波输出错误。已逐操作数 `$signed` 扩展，仍保留（对 >32768 码输入仍是正确修复） |
 | 2 | `alpha_shift` 位宽扩展 | `slv_reg2[6:2]` | 3-bit(0..7) → 5-bit(0..31)，默认 10 |
 | 3 | `max_pulse_wid` 位宽扩展 + 迁移 | `slv_reg3[31:24]` → `slv_reg4[15:0]` | 8-bit(0..255) → 16-bit(0..65535)，默认 255 |
 | 4 | 监视回读竞态修复 | Vitis `signal_analyzer.c` | `read_baseline_mon` 写 `mon_ch` 后加一次 flush 空读，避免读到上一通道旧值 |
 | 5 | 阶段4 UDP 命令映射 | Vitis `udp_server.c` + Desktop `UdpCommClient` | `CMD_BASELINE_SETTINGS(0x0D)` / `CMD_BASELINE_MONITOR(0x0E)`，HMI 新增「Baseline Debug Console」 |
 | 6 | HMI 连接状态修复 | Desktop `BaselineDebugDialog` | 打开控制台时按 controller 当前状态刷新，不再显示 stale "Disconnected" |
+| 7 | **基线估计器流水线化（时序修复，本次根因）** | `baseline_estimator.v` | EMA 反馈路径 `baseline → 减法(err) → 5 级桶形移位 → 加法 → baseline` 在 199 MHz 单周期内裕量不足（`alpha_shift` 由 3-bit 扩为 5-bit 又加深了 2 级移位）。时序违例会让 `baseline` 寄存器偶发锁存未稳定值 → 基线大范围跳变。修复：插入 `err_reg` 将路径拆成（减法）与（移位+加法）两级。另对 `sample_in`、`err_reg` 加 `MARK_DEBUG` 供 ILA 定位 |
 
 > **本 SOP 以 HMI 基线调试台为主测入口**（阶段4 已接通 UDP）。ILA 仅作深挖辅助，不再需要 XSCT / 临时改 PS 代码下参。
 
