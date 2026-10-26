@@ -1119,7 +1119,7 @@
 	        6'h29   : reg_data_out <= slv_reg41;
 	        6'h2A   : reg_data_out <= slv_reg42;
 	        6'h2B   : reg_data_out <= {{13{1'b0}}, baseline_valid_mon, baseline_mon}; // [18]=valid, [17:0]=baseline
-	        6'h2C   : reg_data_out <= slv_reg44;
+	        6'h2C   : reg_data_out <= {23'b0, analyze_en, pulse_active}; // [8]=analyze_en, [7:0]=pulse_active
 	        6'h2D   : reg_data_out <= slv_reg45;
 	        6'h2E   : reg_data_out <= slv_reg46;
 	        6'h2F   : reg_data_out <= slv_reg47;
