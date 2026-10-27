@@ -7,7 +7,7 @@ module pulse_analyzer #(
   input  wire                          clk,
   input  wire                          rst_n,
   input  wire [63:0]                   time_stamp_in, // in clock cycles
-  input  wire                          sample_valid,   // new sample available
+  (*MARK_DEBUG="true"*)input  wire                          sample_valid,   // new sample available
   input  wire signed [C_AD_DATA_DEPTH-1:0] sample_in,
   input  wire                          enabled,
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
@@ -26,8 +26,31 @@ module pulse_analyzer #(
 
   // Relative detection reference: when baseline is trusted, trigger against
   // (baseline + threshold); otherwise fall back to the absolute threshold.
+  //
+  // The sum MUST saturate. `baseline_out + threshold_value` is an 18-bit signed
+  // add, and when the input clips the baseline settles near +FS (131071), so
+  // baseline + threshold (e.g. 130027 + 3000 = 133027) wrapped to -129117. Every
+  // sample was then "above threshold", pulse_active stayed high forever, the
+  // pulse width watchdog fired no matter how large max_pulse_wid was, and the
+  // baseline froze on that channel. Saturating sends the reference to +FS
+  // instead, which correctly means "nothing can trigger".
+  wire signed [C_AD_DATA_DEPTH:0] detect_sum =
+      {baseline_out[C_AD_DATA_DEPTH-1], baseline_out} +
+      {threshold_value[C_AD_DATA_DEPTH-1], threshold_value};
+
+  wire signed [C_AD_DATA_DEPTH-1:0] detect_ref_sat =
+      (detect_sum[C_AD_DATA_DEPTH:C_AD_DATA_DEPTH-1] == 2'b01) ? {1'b0, {(C_AD_DATA_DEPTH-1){1'b1}}} : // +FS
+      (detect_sum[C_AD_DATA_DEPTH:C_AD_DATA_DEPTH-1] == 2'b10) ? {1'b1, {(C_AD_DATA_DEPTH-1){1'b0}}} : // -FS
+                                                                detect_sum[C_AD_DATA_DEPTH-1:0];
+
+  // A non-positive threshold carries no information ("peak height > 0" would flag
+  // every sample above the baseline), so detection is disabled for that channel.
+  // Without this, an un-configured window (threshold still 0) makes pulse_active
+  // chatter on noise, which in turn gates the baseline's TRACK updates.
+  wire threshold_usable = (threshold_value > 0);
+
   wire signed [C_AD_DATA_DEPTH-1:0] detect_ref =
-      baseline_valid ? (baseline_out + threshold_value) : threshold_value;
+      (baseline_valid && threshold_usable) ? detect_ref_sat : threshold_value;
 
   // Internal regs
   reg signed [C_AD_DATA_DEPTH-1:0] peak_reg;
@@ -73,7 +96,9 @@ module pulse_analyzer #(
         pulse_occurred <= 1'b0; // reset for next event
       end
 
-      if (sample_valid && enabled) begin
+      // threshold_usable gating: an un-configured channel (threshold <= 0) must not
+      // manufacture pulses out of noise -- see the detect_ref comment above.
+      if (sample_valid && enabled && threshold_usable) begin
         if (!in_pulse) begin
           // Not in pulse check for rising above threshold with debounce
           if (sample_in > detect_ref) begin
@@ -134,7 +159,7 @@ module pulse_analyzer #(
           end
         end
 
-      end else if (sample_valid && !enabled) begin
+      end else if (sample_valid && (!enabled || !threshold_usable)) begin
         // Disabled reset state
         in_pulse     <= 1'b0;
         pulse_active <= 1'b0;

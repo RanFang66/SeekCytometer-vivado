@@ -83,7 +83,11 @@ always @(posedge clk or negedge rst_n) begin
                      + $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val_dly2[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val_dly2[ch] })
                      + $signed({ {(SUM_WIDTH-C_AD_DATA_DEPTH){ad_ch_val[ch][C_AD_DATA_DEPTH-1]}}, ad_ch_val[ch] });
 
-            ad_ch_val_filt_arr[ch] <= (sum[ch]) >>> 2;
+            // $signed() on purpose: keep the arithmetic shift unambiguous. A signed
+            // right shift inside an unsigned expression context is a real pitfall
+            // (see baseline_estimator.v, where it corrupted the estimate); this one
+            // stands alone and works, but making it explicit costs nothing.
+            ad_ch_val_filt_arr[ch] <= $signed(sum[ch]) >>> 2;
         end
     end
 end
