@@ -16,8 +16,17 @@
 //
 //  Latency from trigger rising edge to valid output:
 //    Interval / Rectangle :  1 cycle
-//    Polygon (N edges)    :  N + 2 cycles  (max 14 for N=12)
-//    Ellipse              :  5 cycles  (4-stage pipeline + result latch)
+//    Polygon (N edges)    :  N + 3 cycles  (max 15 for N=12)
+//    Ellipse              :  6 cycles  (5-stage pipeline + result latch)
+//
+//  2026-10-27 timing rework: the 199 MHz implementation report showed this module
+//  as the only failing logic (WNS -0.621 ns, 10 endpoints). Two chains were too
+//  long for a 5 ns period:
+//    * polygon: s1_* -> 32x32 DSP multiply -> 64-bit compare -> XOR -> crossing_acc
+//    * ellipse: 132-bit add -> 132-bit compare in a single stage
+//  Each was split with one extra register (polygon products, ellipse sum), which
+//  costs one cycle of latency per path and nothing in throughput. Both consumers
+//  qualify the result with `valid`, so the added latency is transparent.
 //////////////////////////////////////////////////////////////////////////////////
 
 module gate_judge_pipeline #(
@@ -139,14 +148,19 @@ module gate_judge_pipeline #(
     reg                 s1_y2_gt_y1;                 // direction flag
     reg                 s1_valid;                    // stage 1 output is valid
 
-    // --- Stage 2 combinational (multiply from registered operands) ---
-    //     a = (py - y1),  b = (x2 - x1)  =>  lhs = (py-y1)*(x2-x1)
-    //     c = (px - x1),  d = (y2 - y1)  =>  rhs = (px-x1)*(y2-y1)
-    wire signed [MW-1:0] poly_lhs = s1_a * s1_b;
-    wire signed [MW-1:0] poly_rhs = s1_c * s1_d;
-    wire poly_cross_left = s1_y2_gt_y1 ? (poly_lhs < poly_rhs)
-                                       : (poly_lhs > poly_rhs);
-    wire poly_crosses = ~s1_skip & ~poly_cross_left;
+    // --- Stage 2 registers: multiplier outputs ---
+    //     The 32x32 multiply used to feed the 64-bit compare in the same cycle as
+    //     the DSP output; registering the products first makes each stage easy to
+    //     close at 199 MHz.
+    reg signed [MW-1:0] s2_lhs, s2_rhs;
+    reg                 s2_skip;                     // skip this edge
+    reg                 s2_y2_gt_y1;                 // direction flag
+    reg                 s2_valid;                    // stage 2 output is valid
+
+    // --- Stage 3 combinational: 64-bit compare from registered products ---
+    wire poly_cross_left = s2_y2_gt_y1 ? (s2_lhs < s2_rhs)
+                                       : (s2_lhs > s2_rhs);
+    wire poly_crosses = ~s2_skip & ~poly_cross_left;
 
     // --- Polygon iteration state ---
     reg [CNT_WIDTH-1:0] edge_idx;       // current edge for stage 1
@@ -220,14 +234,31 @@ module gate_judge_pipeline #(
         end
     end
 
-    // --- Stage 4: addition + comparison (registered) ---
+    // --- Stage 4: sum (registered) ---
+    //     The 132-bit add and the 132-bit compare were previously in one stage;
+    //     splitting them costs one cycle and closes timing.
+    reg signed [PW:0] ell_sum;
+    reg signed [PW:0] ell_rhs_d;      // ell_rhs delayed by one cycle to stay aligned
+
+    always @(posedge sys_clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ell_sum   <= 0;
+            ell_rhs_d <= 0;
+        end else begin
+            // sign-extend before adding so the 133-bit sum cannot overflow
+            ell_sum   <= {ell_t1[PW-1], ell_t1} + {ell_t2[PW-1], ell_t2};
+            ell_rhs_d <= {ell_rhs[PW-1], ell_rhs};
+        end
+    end
+
+    // --- Stage 5: comparison (registered) ---
     reg ell_result_r;
 
     always @(posedge sys_clk or negedge rst_n) begin
         if (!rst_n)
             ell_result_r <= 1'b0;
         else
-            ell_result_r <= (ell_t1 + ell_t2 <= ell_rhs);
+            ell_result_r <= (ell_sum <= ell_rhs_d);
     end
 
     wire ell_result = ell_result_r;
@@ -254,6 +285,10 @@ module gate_judge_pipeline #(
             s1_a <= 0;  s1_b <= 0;  s1_c <= 0;  s1_d <= 0;
             s1_skip      <= 1'b1;
             s1_y2_gt_y1  <= 1'b0;
+            s2_lhs <= 0;  s2_rhs <= 0;
+            s2_skip      <= 1'b1;
+            s2_y2_gt_y1  <= 1'b0;
+            s2_valid     <= 1'b0;
             poly_feeding <= 1'b0;
             // Ellipse
             ell_cnt      <= 3'd0;
@@ -268,6 +303,7 @@ module gate_judge_pipeline #(
                         edge_idx     <= {CNT_WIDTH{1'b0}};
                         crossing_acc <= 1'b0;
                         s1_valid     <= 1'b0;
+                        s2_valid     <= 1'b0;   // never carry a stale edge into a new gate
                         poly_feeding <= 1'b1;
                         // Ellipse init
                         ell_cnt      <= 3'd0;
@@ -305,9 +341,17 @@ module gate_judge_pipeline #(
                                 valid_reg  <= 1'b1;
                                 state      <= S_IDLE;
                             end else begin
-                                // Stage 2: multiply & accumulate (previous edge)
-                                if (s1_valid)
+                                // Stage 3: compare registered products, accumulate
+                                if (s2_valid)
                                     crossing_acc <= crossing_acc ^ poly_crosses;
+
+                                // Stage 2: register the products of the edge stage 1
+                                // is presenting this cycle
+                                s2_lhs      <= s1_a * s1_b;
+                                s2_rhs      <= s1_c * s1_d;
+                                s2_skip     <= s1_skip;
+                                s2_y2_gt_y1 <= s1_y2_gt_y1;
+                                s2_valid    <= s1_valid;
 
                                 // Stage 1: compute diffs for current edge
                                 if (poly_feeding) begin
@@ -328,8 +372,8 @@ module gate_judge_pipeline #(
                                     s1_valid <= 1'b0;
                                 end
 
-                                // Done: stage 1 drained and stage 2 flushed
-                                if (!poly_feeding && !s1_valid) begin
+                                // Done: all three stages drained
+                                if (!poly_feeding && !s1_valid && !s2_valid) begin
                                     result_reg <= crossing_acc;
                                     valid_reg  <= 1'b1;
                                     state      <= S_IDLE;
@@ -337,10 +381,10 @@ module gate_judge_pipeline #(
                             end
                         end
 
-                        // --- Ellipse: wait for 3-stage pipeline ---
+                        // --- Ellipse: wait for the 5-stage pipeline ---
                         GT_ELLIPSE: begin
                             ell_cnt <= ell_cnt + 1'b1;
-                            if (ell_cnt == 3'd4) begin
+                            if (ell_cnt == 3'd5) begin
                                 result_reg <= ell_result;
                                 valid_reg  <= 1'b1;
                                 state      <= S_IDLE;
