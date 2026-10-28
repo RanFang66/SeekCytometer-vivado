@@ -126,16 +126,14 @@ module event_aggregator #(
     // -------------------------------------------------------------------------
     // 速测配对：交给独立模块 speed_measure.v
     //
-    // 配对（双向窗口 + 一次性消费 + pre/post 归属判定）全部搬进了 speed_measure，
-    // 这里只提供两个输入（两通道的峰时间、事件开始/结束）并锁存结果，方便单独
-    // 维护和仿真。配对的动机见 speed_measure.v 的文件头注释。
+    // 配对（pre 候选选择 + 双向窗口 + 漏检拒绝）全部搬进了 speed_measure，这里只
+    // 提供两通道的峰时间并锁存结果，方便单独维护和仿真。动机见 speed_measure.v
+    // 的文件头注释。
     // -------------------------------------------------------------------------
-    wire        event_start = event_active_masked & ~event_active_d;
-
     wire [63:0] sm_post_time;
     wire [31:0] sm_time_diff;
     wire        sm_valid;
-    wire        sm_pair_pending;
+    wire [1:0]  sm_pre_hist;
 
     speed_measure u_speed_measure (
         .clk(clk),
@@ -144,14 +142,12 @@ module event_aggregator #(
         .enable(speed_measure_en),
         .pre_peak_time(speed_pre_time),
         .post_peak_time(speed_post_time),
-        .event_start(event_start),
-        .event_done(event_done),
         .min_time_diff(min_time_diff),
         .max_time_diff(max_time_diff),
         .measured_post_time(sm_post_time),
         .measured_time_diff(sm_time_diff),
         .measured_valid(sm_valid),
-        .pair_pending(sm_pair_pending)
+        .pre_hist_count(sm_pre_hist)
     );
 
     integer idx;
