@@ -29,7 +29,6 @@
 //   alpha_shift            : up-leg shift K (alpha = 2^-K), clamped to [4, 20]
 //   acquire_len            : warm-up samples before baseline_valid is asserted
 //   state (probed)         : 0 = still warming up, 1 = converged
-//   dbg_acq_cnt            : warm-up progress counter
 // ----------------------------------------------------------------------------
 module baseline_estimator #(
     parameter integer C_AD_DATA_DEPTH = 18,
@@ -49,8 +48,6 @@ module baseline_estimator #(
     input  wire [15:0]                       max_pulse_wid,  // unused
     (*MARK_DEBUG="true"*) output reg         baseline_valid,
     output reg                               overflow,       // always 0 now
-    output wire                              dbg_state,
-    output wire [15:0]                       dbg_acq_cnt,
     (*MARK_DEBUG="true"*) output wire signed [C_AD_DATA_DEPTH-1:0] baseline_out,
     output wire signed [C_AD_DATA_DEPTH-1:0] sample_baselined
 );
@@ -61,6 +58,7 @@ module baseline_estimator #(
     (*MARK_DEBUG="true"*) reg signed [CBW-1:0]     baseline;  // Q18.6
     (*MARK_DEBUG="true"*) reg signed [CBW:0]       err_reg;   // one-cycle pipeline stage
     reg [15:0] warm_cnt;
+    reg [15:0] level_cnt;   // consecutive samples with no sample below the estimate
 
     wire signed [CBW-1:0] sample_fp = {sample_in, {C_FRAC_BITS{1'b0}}};
 
@@ -70,7 +68,26 @@ module baseline_estimator #(
     // Up-leg shift K in [4, 20]; the down-leg is fixed at 2^-4.
     wire [4:0] up_shift = (alpha_shift < 5'd4)  ? 5'd4 :
                           (alpha_shift > 5'd20) ? 5'd20 : alpha_shift;
-    wire [4:0] cur_shift = err_reg[CBW] ? 5'd4 : up_shift;
+
+    // ------------------------------------------------------------------------
+    // Level-follow timeout ("Max Pulse Width").
+    //
+    // The slow up-leg intentionally ignores everything above the estimate, which
+    // is what keeps a pulse train from dragging the baseline upward. But it also
+    // means a REAL level step (bubble, blockage, front-end drift) is followed at
+    // 2^-alpha -- minutes for a few thousand codes.
+    //
+    // This counter measures how long the input has stayed above the estimate
+    // *without a single sample below it*. A pulse train resets it every period
+    // (each 1 kHz pulse has samples near the floor, and at 200 kSPS a period is
+    // only ~200 samples), so it can never reach a sane max_pulse_wid. A genuine
+    // level shift does, and then the up-leg is temporarily accelerated to 2^-6.
+    //
+    // max_pulse_wid == 0 disables the feature (never accelerate).
+    // ------------------------------------------------------------------------
+    wire        level_fast = (max_pulse_wid != 16'd0) && (level_cnt >= max_pulse_wid);
+    wire [4:0]  cur_shift  = err_reg[CBW] ? 5'd4 :
+                             level_fast   ? 5'd6 : up_shift;
 
     // ------------------------------------------------------------------------
     // Sign-magnitude correction.
@@ -118,6 +135,7 @@ module baseline_estimator #(
             baseline_valid <= 1'b0;
             state          <= 1'b0;
             warm_cnt       <= 16'd0;
+            level_cnt      <= 16'd0;
             overflow       <= 1'b0;
         end else begin
             overflow <= 1'b0;
@@ -129,10 +147,21 @@ module baseline_estimator #(
                     baseline  <= sample_fp;
                     err_reg   <= {(CBW+1){1'b0}};
                     warm_cnt  <= 16'd0;
+                    level_cnt <= 16'd0;
                     state     <= 1'b0;
                     baseline_valid <= 1'b0;
                 end else begin
                     baseline <= next_baseline;
+
+                    // Level-follow counter. err_reg[CBW] is the sign of the error
+                    // computed for the sample *before* this one; a negative error
+                    // means that sample dipped below the estimate, i.e. the floor
+                    // was seen, which restarts the timeout.
+                    if (err_reg[CBW])
+                        level_cnt <= 16'd0;
+                    else if (!level_fast)
+                        level_cnt <= level_cnt + 1'b1;
+
                     if (warm_cnt < warm_target) begin
                         warm_cnt <= warm_cnt + 1'b1;
                     end else begin
@@ -146,7 +175,5 @@ module baseline_estimator #(
 
     assign baseline_out     = baseline[CBW-1 : C_FRAC_BITS];
     assign sample_baselined = sample_in - baseline_out;
-    assign dbg_state        = state;
-    assign dbg_acq_cnt      = warm_cnt;
 
 endmodule
