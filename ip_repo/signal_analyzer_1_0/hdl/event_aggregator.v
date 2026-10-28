@@ -23,6 +23,7 @@ module event_aggregator #(
     input wire [2:0]                speed_pre_channel,  // Channel index for pre-event (0 to NUM_CH-1)
     input wire [2:0]                speed_post_channel, // Channel index for post-event (0 to NUM_CH-1)
     input wire [31:0]               max_time_diff,      // Maximum valid time difference for speed measurement
+    input wire [31:0]               min_time_diff,      // Minimum valid time difference (rejects 0 / near-0 pairings)
 
 
     output reg  [31:0]             event_id,   
@@ -210,7 +211,17 @@ module event_aggregator #(
 
                         latched_post_event_time <= speed_post_time;
                         if (speed_measure_en) begin
-                            if (time_diff < max_time_diff) begin
+                            // 双向窗口: 只有 min_time_diff <= dt < max_time_diff 才算一次
+                            // 可信测量。
+                            //
+                            // 上界一直是有的, 但它默认 200 us(20 um 对应 0.1 m/s), 比真实
+                            // dt(几 us ~ 几十 us)宽 10~100 倍, 几乎拦不住任何错配。下界则
+                            // 完全缺失: dt = 0/1 us(两个峰落在同一个 us 刻度、或 pre 通道
+                            // 被串扰触发) 会被当成合法值, 对应几十 m/s。
+                            //
+                            // 注意 time_diff 是 64 位无符号相减: post 早于 pre 时会回绕成
+                            // 巨大数, 自然被上界拒绝。
+                            if (time_diff >= min_time_diff && time_diff < max_time_diff) begin
                                 latched_time_diff <= time_diff[31:0];
                                 latched_header[22] <= 1'b1; // valid speed measurement
                             end else begin // keep previous values

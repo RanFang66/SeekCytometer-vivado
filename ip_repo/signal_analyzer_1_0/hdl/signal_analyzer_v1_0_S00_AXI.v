@@ -296,6 +296,7 @@
 	wire [2:0] speed_post;
 	wire signed [31:0] dist;
 	wire [31:0]	max_time_diff;
+	wire [31:0]	min_time_diff;
 
 	// Delay reference channel selection (from slv_reg52[18:16])
 	wire [2:0] delay_refer_ch;
@@ -443,7 +444,7 @@
 	      slv_reg41 <= 0;
 	      slv_reg42 <= 0;
 	      slv_reg44 <= 0;
-	      slv_reg45 <= 0;
+	      slv_reg45 <= 32'd1;   // default speed min_time_diff = 1 us (reject dt = 0)
 	      slv_reg46 <= 0;
 	      slv_reg47 <= 0;
 	      slv_reg48 <= 0;
@@ -451,7 +452,7 @@
 	      slv_reg50 <= 0;
 	      slv_reg51 <= 0;
 	      slv_reg52 <= 0;
-	      slv_reg53 <= 0;
+	      slv_reg53 <= 32'd200; // default speed max_time_diff = 200 us
 	      slv_reg54 <= 0;
 	      slv_reg56 <= 0;
 	      slv_reg57 <= 0;
@@ -1371,6 +1372,7 @@
 	assign speed_post = slv_reg52[10:8];
 	assign delay_refer_ch = slv_reg52[18:16];
 	assign max_time_diff = slv_reg53[31:0]; // Maximum time difference in us between pre and post signals
+	assign min_time_diff = slv_reg45[31:0]; // Minimum valid dt in us (0 = accept dt = 0)
 	assign dist = slv_reg54[31:0]; // Distance in um for speed measurement
 	// Use delay_refer_ch's peak_time as the delay reference; falls back to time_us in
 	// drive_signal_generation when delay_refer_en is low.
@@ -1484,6 +1486,7 @@
 		.speed_pre_channel(speed_pre),
 		.speed_post_channel(speed_post),
 		.max_time_diff(max_time_diff),
+		.min_time_diff(min_time_diff),
 		
 		.sort_trig(sort_trig),
 		.sort_ready(sort_ready),
