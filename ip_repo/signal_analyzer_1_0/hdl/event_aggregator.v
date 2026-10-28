@@ -124,64 +124,35 @@ module event_aggregator #(
     reg [31:0] latched_post_event_time;
 
     // -------------------------------------------------------------------------
-    // 速测配对：一次性消费语义
+    // 速测配对：交给独立模块 speed_measure.v
     //
-    // 原实现是"事件结束那一刻去读 pre 通道最近一次脉冲的峰时间", 于是:
-    //   * 一个细胞只在 post 光斑产生脉冲(漏检 pre) -> 拿到上一个细胞的 pre 时间, dt 偏大;
-    //   * 两个细胞间距小于两光斑飞行时间 -> 下一个细胞的 pre 覆盖了本细胞的 pre, dt 偏小;
-    //   * 噪声毛刺单独成一个事件 -> 配对数据完全不同源。
-    // 只有上/下界能兜住一部分。
-    //
-    // 改成: pre 脉冲完成时登记为"待配对"(pre_pending/pre_ts); 事件**开始**时
-    // (post 通道脉冲上升沿)把它搬进 event_pre_* 并立即消费掉。因为 post 脉冲上升
-    // 时本细胞的 pre 一定已经过去, 这一刻取的才是"属于这个细胞"的 pre; 之后
-    // 任何新的 pre 只会留给下一个细胞。
+    // 配对（双向窗口 + 一次性消费 + pre/post 归属判定）全部搬进了 speed_measure，
+    // 这里只提供两个输入（两通道的峰时间、事件开始/结束）并锁存结果，方便单独
+    // 维护和仿真。配对的动机见 speed_measure.v 的文件头注释。
     // -------------------------------------------------------------------------
-    reg        pre_pending;                     // 有一个 pre 脉冲等待配对
-    reg [63:0] pre_ts;                          // 待配对的 pre 峰时间
-    reg [63:0] pre_seen;                        // 上一次看到的 pre 峰时间(用于检测"新脉冲")
-    reg        event_pre_ok;                    // 本事件开始时的 pre 配对是否有效
-    reg [63:0] event_pre_ts;                    // 本事件锁存的 pre 峰时间
+    wire        event_start = event_active_masked & ~event_active_d;
 
-    wire pre_pulse_new = (speed_pre_time != 64'd0) && (speed_pre_time != pre_seen);
-    wire event_start   = event_active_masked & ~event_active_d;
+    wire [63:0] sm_post_time;
+    wire [31:0] sm_time_diff;
+    wire        sm_valid;
+    wire        sm_pair_pending;
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            pre_pending  <= 1'b0;
-            pre_ts       <= 64'd0;
-            pre_seen     <= 64'd0;
-            event_pre_ok <= 1'b0;
-            event_pre_ts <= 64'd0;
-        end else if (!analyze_en) begin
-            pre_pending  <= 1'b0;
-            pre_ts       <= 64'd0;
-            pre_seen     <= 64'd0;
-            event_pre_ok <= 1'b0;
-            event_pre_ts <= 64'd0;
-        end else begin
-            // 新的 pre 脉冲(通过质量门) -> 登记待配对
-            if (speed_measure_en && pre_pulse_new) begin
-                pre_pending <= 1'b1;
-                pre_ts      <= speed_pre_time;
-                pre_seen    <= speed_pre_time;
-            end
-
-            // 事件开始 -> 把待配对的 pre 搬进来并消费掉
-            if (event_start) begin
-                event_pre_ok <= pre_pending;
-                event_pre_ts <= pre_ts;
-                pre_pending  <= 1'b0;
-            end
-
-            // 事件结束 -> 本次配对失效(下一个事件必须重新配对)
-            if (event_done)
-                event_pre_ok <= 1'b0;
-        end
-    end
-
-    // 用锁存到事件开始时刻的 pre 计算 dt
-    wire [63:0] time_diff = speed_post_time - event_pre_ts;
+    speed_measure u_speed_measure (
+        .clk(clk),
+        .rst_n(rst_n),
+        .analyze_en(analyze_en),
+        .enable(speed_measure_en),
+        .pre_peak_time(speed_pre_time),
+        .post_peak_time(speed_post_time),
+        .event_start(event_start),
+        .event_done(event_done),
+        .min_time_diff(min_time_diff),
+        .max_time_diff(max_time_diff),
+        .measured_post_time(sm_post_time),
+        .measured_time_diff(sm_time_diff),
+        .measured_valid(sm_valid),
+        .pair_pending(sm_pair_pending)
+    );
 
     integer idx;
     reg wrap_around; // indicates if write pointer wrapped around
@@ -280,18 +251,14 @@ module event_aggregator #(
                         latched_header <= event_id[19:0]; // low 20 bits
                         // bits [20:21] will be set in S_WAIT_GATE after gate judge completes
 
-                        latched_post_event_time <= speed_post_time;
+                        latched_post_event_time <= sm_post_time;
                         if (speed_measure_en) begin
-                            // 配对成立的必要条件: 事件开始时确实捕获到一个"待配对"的
-                            // pre 脉冲(event_pre_ok), 并且 dt 落在 [min, max) 窗口内。
-                            // 上界挡掉"用了上一个细胞的 pre", 下界挡掉"两个峰落在同一
-                            // 时间刻度 / pre 通道被串扰触发"。
-                            //
-                            // time_diff 是 64 位无符号相减: post 早于 pre 时回绕成巨大数,
-                            // 自然被上界拒绝。
-                            if (event_pre_ok &&
-                                time_diff >= min_time_diff && time_diff < max_time_diff) begin
-                                latched_time_diff <= time_diff[31:0];
+                            // 配对是否成立、dt 是否在 [min, max) 窗口内, 都由
+                            // speed_measure 模块判定(见 speed_measure.v)。
+                            // 判为无效时保留上一次的 dt: 分选延时用它比用 0 安全,
+                            // 但有效位会置 0, 上位机据此把它排除在统计之外。
+                            if (sm_valid) begin
+                                latched_time_diff <= sm_time_diff;
                                 latched_header[22] <= 1'b1; // valid speed measurement
                             end else begin // keep previous values
                                 latched_time_diff <= latched_time_diff;

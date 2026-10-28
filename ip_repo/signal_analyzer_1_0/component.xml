@@ -410,7 +410,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>eb001ba4</spirit:value>
+            <spirit:value>8fe5fcf6</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -426,7 +426,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>eb001ba4</spirit:value>
+            <spirit:value>8fe5fcf6</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -1271,6 +1271,10 @@
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
+        <spirit:name>hdl/speed_measure.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+      </spirit:file>
+      <spirit:file>
         <spirit:name>hdl/drive_signal_generation.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
@@ -1316,6 +1320,10 @@
       </spirit:file>
       <spirit:file>
         <spirit:name>hdl/event_aggregator.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+      </spirit:file>
+      <spirit:file>
+        <spirit:name>hdl/speed_measure.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
@@ -1440,14 +1448,14 @@
         <xilinx:taxonomy>AXI_Peripheral</xilinx:taxonomy>
       </xilinx:taxonomies>
       <xilinx:displayName>signal_analyzer_v1.0</xilinx:displayName>
-      <xilinx:coreRevision>95</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-28T02:32:15Z</xilinx:coreCreationDateTime>
+      <xilinx:coreRevision>96</xilinx:coreRevision>
+      <xilinx:coreCreationDateTime>2026-10-28T06:54:29Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2023.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="2d137e97"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="ed1368d5"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="41340b54"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="94752856"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="2c4c3246"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="5b38756d"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="0f81f8be"/>
