@@ -13,9 +13,15 @@ module pulse_analyzer #(
   input  wire signed [C_AD_DATA_DEPTH-1:0] threshold_value,
   input  wire signed [C_AD_DATA_DEPTH-1:0] baseline_out, // per-channel baseline (integer), metric-level correction
   input  wire                          baseline_valid,  // 1 = baseline trusted, switch to relative threshold
+  input  wire [C_AD_DATA_DEPTH-1:0]     peak_margin,     // 峰值须比 detect_ref 再高这么多码才算有效脉冲 (0=关闭)
   input  wire                          event_done,     // event boundary: clear outputs if no pulse in this event
   output reg                           pulse_active,   // high while in pulse
   output reg                           pulse_done,     // one clock pulse at pulse end
+  // 本事件内是否已有"通过质量门"的脉冲。event_aggregator 用它判断空事件(噪声)与
+  // 速测配对是否成立 —— 这是与 pulse_active 不同的语义: pulse_active 只要越过阈值
+  // 就有效, 而这里要求峰值真的比阈值高出一截。
+  output wire                          pulse_valid_out,
+  output reg  [15:0]                    reject_count,   // 被质量门丢弃的脉冲累计(诊断)
   output reg signed [C_AD_DATA_DEPTH-1:0] peak_out,
   output reg [63:0]                    peak_time_out, // in clock cycles
   output reg [15:0]                    width_out,      // in samples
@@ -66,6 +72,28 @@ module pulse_analyzer #(
   // Track whether a pulse completed during the current event
   reg pulse_occurred;
 
+  // ---------------------------------------------------------------------------
+  // 峰值质量门
+  //
+  // 现场用信号源测速时发现: 偶发的"测速 bad"几乎都是噪声刚好越过阈值形成的
+  // 4 样本、峰值 548 码的假脉冲 —— 它单独开启/结束一个事件, 配对时拿到的是
+  // 上一次事件的峰时间, 于是 dt 变成约一个脉冲周期而被判无效。
+  //
+  // 这里在脉冲结束时再判一次: 峰值必须比检测参考 detect_ref 再高出 peak_margin
+  // 码。不满足则丢弃该脉冲 —— 不更新 peak_time_out、不更新指标、不计入
+  // pulse_occurred, 于是它既不会污染速测配对, 也会让所属事件成为"空事件"。
+  //
+  // 判据放在脉冲结束而不是上升沿: 上升沿时刻与去抖完全不变, 所以对峰时间精度
+  // (测速的核心)没有影响。peak_margin = 0 表示关闭, 行为与之前完全一致。
+  // ---------------------------------------------------------------------------
+  wire signed [C_AD_DATA_DEPTH:0] accept_sum =
+      {detect_ref[C_AD_DATA_DEPTH-1], detect_ref} + {1'b0, peak_margin};
+
+  wire peak_accept = (peak_margin == {C_AD_DATA_DEPTH{1'b0}})
+                     || ({peak_reg[C_AD_DATA_DEPTH-1], peak_reg} >= accept_sum);
+
+  assign pulse_valid_out = pulse_occurred;
+
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       in_pulse     <= 1'b0;
@@ -82,6 +110,7 @@ module pulse_analyzer #(
       rise_count   <= 0;
       fall_count   <= 0;
       pulse_occurred <= 1'b0;
+      reject_count   <= 16'd0;
     end else begin
       pulse_done <= 1'b0; // default
 
@@ -142,13 +171,23 @@ module pulse_analyzer #(
             in_pulse     <= 1'b0;
             pulse_active <= 1'b0;
             pulse_done   <= 1'b1;
-            pulse_occurred <= 1'b1;
-            // Metric-level baseline correction at pulse end: subtract baseline
-            // from raw peak/area. Detection now uses relative threshold (phase 2).
-            peak_out     <= peak_reg - baseline_out;
-            width_out    <= width_reg;
-            area_out     <= area_reg - baseline_out * $signed({1'b0, width_reg});
-            peak_time_out <= peak_time_reg;
+            if (peak_accept) begin
+              pulse_occurred <= 1'b1;
+              // Metric-level baseline correction at pulse end: subtract baseline
+              // from raw peak/area. Detection now uses relative threshold (phase 2).
+              peak_out     <= peak_reg - baseline_out;
+              width_out    <= width_reg;
+              area_out     <= area_reg - baseline_out * $signed({1'b0, width_reg});
+              peak_time_out <= peak_time_reg;
+            end else begin
+              // 峰值只比阈值高一丁点 -> 判为噪声, 整条脉冲作废:
+              // 指标清零、不更新峰时间(因此不会污染速测配对)、不计入 pulse_occurred
+              // (因此所属事件会被 event_aggregator 当作空事件丢弃)。
+              peak_out      <= {C_AD_DATA_DEPTH{1'b0}};
+              width_out     <= 16'd0;
+              area_out      <= {C_AREA_WIDTH{1'b0}};
+              reject_count  <= reject_count + 1'b1;
+            end
             // Reset working regs
             peak_reg     <= {C_AD_DATA_DEPTH{1'b0}};
             width_reg    <= 16'd0;

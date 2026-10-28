@@ -246,6 +246,7 @@
 	wire [63:0] peak_time [C_AD_CHANNEL_NUM-1:0];
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_active;
 	wire [C_AD_CHANNEL_NUM-1:0] pulse_done;
+	wire [C_AD_CHANNEL_NUM-1:0] pulse_accepted;   // 本事件内已通过峰值质量门的脉冲
 
 	wire signed [C_AD_DATA_DEPTH-1:0] baseline_out [C_AD_CHANNEL_NUM-1:0];
 	wire [C_AD_CHANNEL_NUM-1:0] baseline_valid;
@@ -268,6 +269,7 @@
 	wire signed [C_AD_CHANNEL_NUM*32-1:0] ch_area_flat;
 	wire [C_AD_CHANNEL_NUM*16-1:0] ch_width_flat;
 	wire [C_AD_CHANNEL_NUM*64-1:0] ch_peak_time_flat;
+	wire [C_AD_CHANNEL_NUM-1:0] ch_pulse_accepted;   // pulse_analyzer 的质量门通过标志
 	genvar gi;
 	generate
 		for (gi = 0; gi < C_AD_CHANNEL_NUM; gi = gi + 1) begin
@@ -275,6 +277,7 @@
 			assign ch_area_flat[gi*32 +: 32] = pulse_area[gi];
 			assign ch_width_flat[gi*16 +: 16] = pulse_width[gi];
 			assign ch_peak_time_flat[gi*64 +: 64] = peak_time[gi];	
+			assign ch_pulse_accepted[gi] = pulse_accepted[gi];
 		end
 	endgenerate
 
@@ -297,6 +300,7 @@
 	wire signed [31:0] dist;
 	wire [31:0]	max_time_diff;
 	wire [31:0]	min_time_diff;
+	wire [17:0]	peak_margin;      // 峰值须比 detect_ref 再高这么多码 (slv_reg46, 0=关闭)
 
 	// Delay reference channel selection (from slv_reg52[18:16])
 	wire [2:0] delay_refer_ch;
@@ -1373,6 +1377,7 @@
 	assign delay_refer_ch = slv_reg52[18:16];
 	assign max_time_diff = slv_reg53[31:0]; // Maximum time difference in us between pre and post signals
 	assign min_time_diff = slv_reg45[31:0]; // Minimum valid dt in us (0 = accept dt = 0)
+	assign peak_margin  = slv_reg46[17:0]; // 峰值质量门余量, 见 pulse_analyzer.v
 	assign dist = slv_reg54[31:0]; // Distance in um for speed measurement
 	// Use delay_refer_ch's peak_time as the delay reference; falls back to time_us in
 	// drive_signal_generation when delay_refer_en is low.
@@ -1425,13 +1430,15 @@
 			.threshold_value(threshold_value[i]),
 			.baseline_out(baseline_en ? baseline_out[i] : {C_AD_DATA_DEPTH{1'b0}}),
 			.baseline_valid(baseline_en & baseline_valid[i]),
+			.peak_margin(peak_margin),
 			.event_done(event_done),
 			.pulse_active(pulse_active[i]),
 			.pulse_done(pulse_done[i]),
 			.width_out(pulse_width[i]),
 			.peak_out(pulse_peak[i]),
 			.area_out(pulse_area[i]),
-			.peak_time_out(peak_time[i])
+			.peak_time_out(peak_time[i]),
+			.pulse_valid_out(pulse_accepted[i])
 	    );
 	  end
 	endgenerate
@@ -1487,6 +1494,7 @@
 		.speed_post_channel(speed_post),
 		.max_time_diff(max_time_diff),
 		.min_time_diff(min_time_diff),
+		.ch_pulse_accepted(ch_pulse_accepted),
 		
 		.sort_trig(sort_trig),
 		.sort_ready(sort_ready),
