@@ -250,8 +250,6 @@
 	wire signed [C_AD_DATA_DEPTH-1:0] baseline_out [C_AD_CHANNEL_NUM-1:0];
 	wire [C_AD_CHANNEL_NUM-1:0] baseline_valid;
 	wire [C_AD_CHANNEL_NUM-1:0] baseline_overflow; // per-channel "pulse wider than max_pulse_wid"
-	wire [C_AD_CHANNEL_NUM-1:0] baseline_state;    // per-channel FSM state (0=ACQUIRE 1=TRACK)
-	wire [15:0] baseline_acq_cnt [C_AD_CHANNEL_NUM-1:0]; // per-channel ACQUIRE progress
 
 	// Baseline correction enable (slv_reg2[0]). When 0, pulse_analyzer falls back
 	// to absolute threshold + raw metrics (effective baseline forced 0 / valid 0).
@@ -263,22 +261,8 @@
 	wire signed [C_AD_DATA_DEPTH-1:0] baseline_mon = baseline_out[mon_ch];
 	wire baseline_valid_mon = baseline_valid[mon_ch];
 
-	// Any channel currently reporting an over-wide pulse / auto re-converging
-	// (slv_reg44[9] / slv_reg44[10]).
+	// Any channel currently reporting an over-wide pulse (slv_reg44[9]).
 	wire baseline_overflow_any = |baseline_overflow;
-
-	// Diagnostic readback (slv_reg55 @ 0x37, read-only, previously unused).
-	//   [13:0]  free-running counter of ADC sample-valid edges -- proves the ADC
-	//           path is alive: read the register twice and compare.
-	//   [31:14] the *raw filtered sample* of the channel selected by slv_reg42.
-	//           That is exactly the number the baseline estimator consumes, so a
-	//           single read answers "does the ADC really see this level?" -- an
-	//           averager can never report a value outside the range of its inputs,
-	//           so if the baseline sits at +FS the samples must be there too.
-	reg  [15:0] sample_cnt;
-	wire signed [C_AD_DATA_DEPTH-1:0] sample_mon = ad_data_array[mon_ch];
-	wire [15:0] baseline_acq_cnt_sel = baseline_acq_cnt[mon_ch];
-
 
 	wire signed [C_AD_CHANNEL_NUM*18-1:0] ch_peak_flat;
 	wire signed [C_AD_CHANNEL_NUM*32-1:0] ch_area_flat;
@@ -1138,8 +1122,8 @@
 	        6'h29   : reg_data_out <= slv_reg41;
 	        6'h2A   : reg_data_out <= slv_reg42;
 	        6'h2B   : reg_data_out <= {{13{1'b0}}, baseline_valid_mon, baseline_mon}; // [18]=valid, [17:0]=baseline
-	        6'h2C   : reg_data_out <= {8'hA7, 6'b0, baseline_state, baseline_overflow_any, analyze_en, pulse_active};
-	        	         // [31:24]=0xA7 build tag, [17:10]=per-channel FSM state (1=TRACK),
+	        6'h2C   : reg_data_out <= {8'hA7, enabled_channels, 6'b0, baseline_overflow_any, analyze_en, pulse_active};
+	        	         // [31:24]=0xA7 build tag (identifies the firmware revision),
 	        	         // [9]=overflow_any, [8]=analyze_en, [7:0]=pulse_active
 	        6'h2D   : reg_data_out <= slv_reg45;
 	        6'h2E   : reg_data_out <= slv_reg46;
@@ -1151,7 +1135,7 @@
 	        6'h34   : reg_data_out <= slv_reg52;
 	        6'h35   : reg_data_out <= slv_reg53;
 	        6'h36   : reg_data_out <= slv_reg54;
-	        6'h37   : reg_data_out <= {sample_mon, sample_cnt[13:0]}; // [31:14]=raw sample of mon_ch  [13:0]=sample_cnt (read-only diagnostic)
+	        6'h37   : reg_data_out <= 32'h0; // 原 slv_reg55 诊断寄存器已移除（该地址无写寄存器）
 	        6'h38   : reg_data_out <= {{7{1'b0}}, wrap_around, last_written_addr[23:0]};//slv_reg56;
 	        6'h39   : reg_data_out <= event_counter;//slv_reg57;
 	        6'h3A   : reg_data_out <= slv_reg58;
@@ -1159,8 +1143,7 @@
 	        6'h3C   : reg_data_out <= slv_reg60;
 	        6'h3D   : reg_data_out <= slv_reg61;
 	        6'h3E   : reg_data_out <= slv_reg62;
-	        6'h3F   : reg_data_out <= {baseline_acq_cnt_sel, 16'h0}; // read-only diagnostic: ACQUIRE progress of mon_ch
-	        	         // (slv_reg63 itself was an unused R/W register; writes are ignored by the PS)
+	        6'h3F   : reg_data_out <= slv_reg63;
 	        default : reg_data_out <= 0;
 	      endcase
 	end
@@ -1411,26 +1394,6 @@
 		end
 	end
 
-	// ADC sample rate meter for the diagnostic register (slv_reg55).
-	//
-	// `sample_cnt` used to count every ad_data_updated, which at 200 kSPS wraps a
-	// 14-bit field every 82 ms -- two reads then look identical no matter how fast
-	// the ADC runs, so it could only prove "alive", not "how fast". It is now
-	// prescaled by 256: at 200 kSPS it advances ~390 counts per 500 ms poll, while
-	// at a few Hz it advances by 0. That is enough to tell "ADC converting" apart
-	// from "ADC stalled and the estimator is starving" -- the state the bench was
-	// actually in (State = ACQUIRE x8, acq_cnt = 1 after 20 minutes of uptime).
-	reg [7:0] sample_prescale;
-	always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
-		if (!S_AXI_ARESETN) begin
-			sample_prescale <= 8'd0;
-			sample_cnt      <= 16'd0;
-		end else if (ad_data_updated) begin
-			sample_prescale <= sample_prescale + 1'b1;
-			if (sample_prescale == 8'hFF)
-				sample_cnt <= sample_cnt + 1'b1;
-		end
-	end
 
 
 	// Pulse analyzers (one per channel)
@@ -1496,8 +1459,6 @@
 			.max_pulse_wid(slv_reg4[15:0]),
 			.baseline_valid(baseline_valid[j]),
 			.overflow(baseline_overflow[j]),
-			.dbg_state(baseline_state[j]),
-			.dbg_acq_cnt(baseline_acq_cnt[j]),
 			.baseline_out(baseline_out[j])
 	    );
 	  end
